@@ -51,9 +51,14 @@ public class LabRun extends Instrumentation {
             boolean emulator = Build.FINGERPRINT.contains("generic") || Build.FINGERPRINT.contains("emu")
                     || Build.HARDWARE.contains("ranchu") || Build.HARDWARE.contains("goldfish");
             // An emulator has no Gemini Nano: it only proves that this run itself works.
-            // A phone without AICore will never have the model: there the run only checks the cloud half.
+            // A phone without AICore will never have the model, and neither will one that still carries
+            // the factory placeholder ("stub") of AICore: the real one arrives through the Play Store,
+            // which needs a Google account that device-farm phones do not have. There the run only
+            // checks the cloud half.
             boolean hasAiCore = !grep(sh("pm list packages"), "package:" + AICORE).isEmpty();
-            boolean quick = emulator || !hasAiCore;
+            boolean stub = !grep(sh("dumpsys package " + AICORE), "versionName=0.stub", "aicore_stub").isEmpty();
+            boolean quick = emulator || !hasAiCore || stub;
+            if (hasAiCore && stub) say("AICore on this phone is the factory placeholder, not the real service: no on-device model is possible here");
             int waitForModelS = quick ? 40 : 1500;
             long budgetMs = (quick ? 6 : 41) * 60_000L;
 
@@ -73,6 +78,15 @@ public class LabRun extends Instrumentation {
             // The one change this run makes to the phone.
             sh("device_config set_sync_disabled_for_tests none");
             say("Configuration sync, after switching it on: " + first(sh("device_config get_sync_disabled_for_tests")));
+            if (!quick) {
+                // Google Play services gave up delivering AICore's settings while the sync was off. Restart it
+                // so it tries again, wait for the settings, then restart AICore so it reads them.
+                sh("am force-stop com.google.android.gms");
+                for (int i = 0; i < 12 && lines(sh("device_config list aicore")).isEmpty(); i++) SystemClock.sleep(10_000);
+                say("AICore settings on the phone after restarting Google Play services: " + lines(sh("device_config list aicore")).size());
+                sh("am force-stop " + AICORE);
+                SystemClock.sleep(5_000);
+            }
 
             Intent open = new Intent();
             open.setClassName(APP, APP + ".MainActivity");
@@ -102,12 +116,12 @@ public class LabRun extends Instrumentation {
                 boolean noModelYet = !contains(app, "On-device model: downloadable") && !contains(app, "On-device model: downloading")
                         && !contains(app, "On-device model: available") && !contains(app, "Download:");
                 // If the model still has not turned up, restart the services that deliver its settings, the way a reboot would.
-                if (!quick && noModelYet && seconds > 240 && !nudgedPlayServices) {
+                if (!quick && noModelYet && seconds > 700 && !nudgedPlayServices) {
                     nudgedPlayServices = true;
                     say("After " + seconds + " s: still no model; restarting Google Play services");
                     sh("am force-stop com.google.android.gms");
                 }
-                if (!quick && noModelYet && seconds > 480 && !nudgedAiCore) {
+                if (!quick && noModelYet && seconds > 400 && !nudgedAiCore) {
                     nudgedAiCore = true;
                     say("After " + seconds + " s: still no model; restarting AICore");
                     sh("am force-stop " + AICORE);

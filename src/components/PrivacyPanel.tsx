@@ -55,6 +55,11 @@ export function PrivacyPanel({ device, onDeviceChange, allowCloud, onAllowCloud,
             {t(device === 'unavailable' && isNativeApp ? 'deviceUnavailableNative' : STATUS_KEY[device])}
           </p>
           {device === 'unavailable' && <p className="help">{t(isNativeApp ? 'deviceHelpNative' : 'deviceHelp')}</p>}
+          {isNativeApp && (
+            <p className="help">
+              <a href="?selftest&wait=120">{t('selfTestLink')}</a>
+            </p>
+          )}
           {(device === 'downloadable' || device === 'downloading') && firebaseConfigured && (
             <button type="button" className="btn" onClick={download} disabled={progress != null}>
               {progress != null ? t('downloading', { pct: progress }) : t('downloadModel')}

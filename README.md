@@ -4,7 +4,7 @@ Check a car repair estimate from your insurer, compare it with a quote from your
 
 Built for the #BuildHybridAI hackathon with the Firebase AI Logic hybrid inference SDK. The interface is in English and Polish.
 
-**Try it:** https://pawelmpuc.github.io/private-claim-check/ (Chrome on a desktop for the on-device model; any browser for the rest)
+**Try it:** https://pawelmpuc.github.io/private-claim-check/ (Chrome on a desktop for the on-device model; any browser for the rest). There is also an [Android app](#android-app).
 
 ## Why on-device
 
@@ -68,6 +68,36 @@ The printed total doubles as a checksum. Gemini Nano sometimes copies a printed 
 
 A row is treated as a deduction only on evidence in the row itself: a negative amount or a word such as "rabat", "depreciation" or "betterment". A section heading alone is not enough, because a misread heading would otherwise add money to the claim.
 
+## Android app
+
+`android/` holds a native Android app (Kotlin, Android 8 and newer). It shows the same interface, packed into the APK, and gives it one door to a model: a small bridge (`AiBridge.kt`) to the **Firebase AI Logic Android SDK**. The routing rules above do not change. The page still decides where a request may run; the bridge calls the SDK with `InferenceMode.ONLY_ON_DEVICE` (Gemini Nano through AICore, on phones that have it) or `InferenceMode.ONLY_IN_CLOUD`, streams the answer back and reports `inferenceSource`. Consent, redaction and the figure checks are the same code as on the web.
+
+App Check protects the AI endpoint on Android too. This build uses the App Check debug provider, which the hackathon rules accept; a store release would use Play Integrity. No APK is published in this repository: build it as shown below.
+
+What has been checked on Android, and what has not:
+
+| Where | What was checked | Result |
+| --- | --- | --- |
+| Pixel 10 Pro, Android 16, a real phone in Firebase Test Lab | Install, start, the status of the on-device model, one request to the cloud model through the SDK with App Check enforced | The cloud request answered in 2 seconds, `inferenceSource` said cloud, the figure check passed. On-device model: unavailable |
+| Galaxy S26, Android 16, a real phone in Firebase Test Lab | Install, start, the status of the on-device model, asked again for 25 minutes | On-device model: unavailable |
+| Android 16 emulator in Firebase Test Lab | The same as on the Pixel | The cloud request answered in 2 seconds, the figure check passed |
+| On-device inference on a phone | | **Not confirmed yet** |
+
+The on-device half could not be shown in Test Lab, and the logs say why. Its phones are wiped before every run and carry no Google account, so AICore, the service that provides Gemini Nano, is still the factory placeholder there (version `0.stub…`); the real one arrives through the Play Store. The Pixel in the lab also has an unlocked bootloader, which rules Gemini Nano out by itself. The on-device code follows the documented calls (`FirebaseAIOnDevice.checkStatus()`, `download()`, `InferenceMode.ONLY_ON_DEVICE`) and reports "unavailable" correctly on every phone above, but no phone with a working Gemini Nano has run it. On such a phone, the link **Check the on-device AI on this phone** in the privacy panel runs the self-test described below.
+
+The self-test (`SelfTest.tsx`) runs by itself. It asks the SDK whether the phone has the on-device model, downloads it if it can, explains the built-in sample estimate on the device, runs the figure check on the answer and, when asked to, repeats the request against the cloud model. Every step is written on the screen and to logcat under the tag `PCC`. The app opens the self-test by itself in Firebase Test Lab; `android/labtest` is a helper APK for an Instrumentation run there, which also records the state of the phone (tag `PCCLAB`).
+
+To build it:
+
+```bash
+npm run android:assets                      # builds the web app into the APK's assets
+cd android
+cp firebase.properties.example firebase.properties   # fill in from the Firebase console
+gradle assembleDebug
+```
+
+Each installation of a debug build makes its own App Check debug token and shows it at the bottom of the privacy panel; register it in the Firebase console (App Check, Apps, Manage debug tokens). Or create a token in the console and put it in `firebase.properties`, and the build works on any phone.
+
 ## What it was tested on
 
 | Document | How it was read | Result |
@@ -127,6 +157,7 @@ The tests cover the audit arithmetic, number parsing, the text-layer layout, the
 - Lines of the quote are matched to the estimate by the words of their descriptions. The amounts are compared by category and do not depend on that matching; the list of work the estimate leaves out does, and the interface asks the user to check it.
 - The missing-operation checks are keyword heuristics. They raise questions; they do not put a price on anything.
 - Redaction is pattern-based. It does not recognise names or street addresses.
+- The Android app has run on Android 16 only. It needs a current Android System WebView; an early build showed a blank screen on a Pixel 5 with WebView 83, the build was changed for it, and that phone has not been tried again.
 - This is information, not legal advice.
 
 ## Licence
