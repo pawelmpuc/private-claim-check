@@ -12,10 +12,11 @@ interface Props {
   onQuote: (quote: Estimate) => void;
   comparison: Comparison;
   rawRead: string | null;
+  rawFromPdf?: boolean;
 }
 
 /** The workshop quote, editable, and how it differs from the insurer's estimate. */
-export function StepCompare({ estimate, quote, onQuote, comparison, rawRead }: Props) {
+export function StepCompare({ estimate, quote, onQuote, comparison, rawRead, rawFromPdf }: Props) {
   const { t, lang } = useT();
   const fmt = (n: number) => money(n, estimate.currency, lang);
   const signed = (n: number) => (n > 0 ? `+${fmt(n)}` : fmt(n));
@@ -85,7 +86,7 @@ export function StepCompare({ estimate, quote, onQuote, comparison, rawRead }: P
         <p className="notice">{t('quoteCheck')}</p>
         {rawRead && (
           <details className="raw">
-            <summary>{t('rawRead')}</summary>
+            <summary>{t(rawFromPdf ? 'rawPdf' : 'rawRead')}</summary>
             <pre className="live">{rawRead}</pre>
           </details>
         )}

@@ -25,6 +25,8 @@ const en = {
   srcNone: 'no AI used',
   logRedactions: '{n} identifier(s) removed before sending',
   logDeviceFailed: 'the device was tried first and did not answer',
+  logTextLayer: 'the PDF carries its own text, read by code',
+  rawPdf: 'Show the text found in the PDF',
 
   step1: '1. Add the estimate',
   step2: '2. Check the lines',
@@ -199,6 +201,8 @@ const pl: Record<Key, string> = {
   srcNone: 'bez AI',
   logRedactions: 'przed wysłaniem usunięto identyfikatory: {n}',
   logDeviceFailed: 'najpierw próbowano na urządzeniu, bez odpowiedzi',
+  logTextLayer: 'PDF zawiera własny tekst, odczytany kodem',
+  rawPdf: 'Pokaż tekst znaleziony w PDF',
 
   step1: '1. Dodaj kosztorys',
   step2: '2. Sprawdź pozycje',

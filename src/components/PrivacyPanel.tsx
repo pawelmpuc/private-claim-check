@@ -73,6 +73,7 @@ export function PrivacyPanel({ device, onDeviceChange, allowCloud, onAllowCloud,
                   </span>
                   {entry.source === 'in_cloud' && entry.redactions > 0 && <small>{t('logRedactions', { n: entry.redactions })}</small>}
                   {entry.note === 'device_failed' && <small>{t('logDeviceFailed')}</small>}
+                  {entry.note === 'text_layer' && <small>{t('logTextLayer')}</small>}
                 </li>
               ))}
             </ul>

@@ -1,3 +1,4 @@
+import { parseSummary } from './summary';
 import type { Estimate, EstimateItem, ItemKind, PartQuality } from './types';
 
 const KINDS: ItemKind[] = ['part', 'labour', 'paint', 'material', 'deduction', 'other'];
@@ -92,6 +93,12 @@ export function normalizeEstimate(raw: unknown): Estimate {
     // Total and subtotal rows would be counted twice.
     .filter((it) => !(it.kind === 'other' && SUMMARY_ROW.test(it.desc)));
   const currency = String(r.currency ?? '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+  // Estimating systems print hours on a labour line and the money only in the totals.
+  const rates = { labour: num(r.labourRate), paint: num(r.paintRate) };
+  for (const it of items) {
+    const rate = it.kind === 'labour' ? rates.labour : it.kind === 'paint' ? rates.paint : null;
+    if (it.total == null && it.unitPrice == null && it.hours != null && rate != null) it.total = Math.round(it.hours * rate * 100) / 100;
+  }
   return {
     currency: currency.length === 3 ? currency : 'EUR',
     labourRate: num(r.labourRate),
@@ -211,10 +218,10 @@ function splitLongLine(line: string): string[] {
 
 function parseRows(text: string, state: { section: ItemKind | null; total: number | null; currency: string | null }): Row[] {
   const rows: Row[] = [];
-  const currency = text.match(/\b(PLN|EUR|GBP|USD|CHF|CZK)\b|z[lł]\b|€|£/i)?.[0];
+  const currency = text.match(/\b(PLN|EUR|GBP|USD|CHF|CZK)\b|z[lł]\b|€|£|\$/i)?.[0];
   if (currency && !state.currency) {
     const c = currency.toUpperCase();
-    state.currency = c === '€' ? 'EUR' : c === '£' ? 'GBP' : /^Z/.test(c) ? 'PLN' : c;
+    state.currency = c === '€' ? 'EUR' : c === '£' ? 'GBP' : c === '$' ? 'USD' : /^Z/.test(c) ? 'PLN' : c;
   }
   for (const rawLine of text.split(/\r?\n/).flatMap(splitLongLine)) {
     const line = rawLine.replace(/\*\*|`/g, '').replace(/^\s*[-*>]\s+/, '').trim();
@@ -448,4 +455,14 @@ export function parsePastedText(text: string, fallbackCurrency = 'EUR'): Estimat
     estimate.currency = c === '€' ? 'EUR' : c === '£' ? 'GBP' : c === '$' ? 'USD' : /^Z/.test(c) ? 'PLN' : c;
   }
   return estimate.items.length >= 2 ? estimate : null;
+}
+
+/**
+ * Structures the text of a document, however it was obtained: from the text layer of a
+ * PDF or from a transcription. The totals block is preferred when the document has one.
+ */
+export function parseDocumentText(pages: string[], fallbackCurrency = 'EUR'): { estimate: Estimate; taxRatePct: number | null; from: 'summary' | 'rows' } {
+  const summary = parseSummary(pages.join('\n'), fallbackCurrency);
+  if (summary) return { ...summary, from: 'summary' };
+  return { estimate: parseTranscription(pages, fallbackCurrency), taxRatePct: null, from: 'rows' };
 }

@@ -53,7 +53,17 @@ function rateFinding(
   const hours = sumHours(items);
   const rate = effectiveRate(printed, items);
   if (hours <= 0 || rate == null) return null;
-  const gap = (target: number) => round2(Math.max(0, target - rate) * hours);
+  // A line that prints its own amount is compared at its own hourly rate, so mechanical
+  // work billed at a higher rate than bodywork is not counted as underpaid.
+  const gap = (target: number) =>
+    round2(
+      items.reduce((s, i) => {
+        const h = i.hours ?? 0;
+        if (h <= 0) return s;
+        const own = i.total != null ? Math.max(rate, i.total / h) : rate;
+        return s + Math.max(0, target - own) * h;
+      }, 0),
+    );
   const amounts: Tiered = { cautious: gap(ref.low), realistic: gap(ref.mid), optimistic: gap(ref.high) };
   if (amounts.optimistic <= 0) return null;
   return {

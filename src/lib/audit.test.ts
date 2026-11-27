@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { audit, defaultSettings, netOfItems, tierTotals } from './audit';
-import { mergeEstimates, normalizeEstimate, parseModelJson, parseNumber, parsePastedText, parseTranscription } from './extract';
+import { audit, defaultSettings, netOfItems, sumMismatch, tierTotals } from './audit';
+import { mergeEstimates, normalizeEstimate, parseDocumentText, parseModelJson, parseNumber, parsePastedText, parseTranscription } from './extract';
+import { hasTextLayer, layoutLines } from './pdftext';
 import { draftLetter, verifyRewrite } from './letter';
 import { redact } from './redact';
 import { countryForCurrency } from './countries';
@@ -479,3 +480,150 @@ describe('workshop quote', () => {
   });
 });
 });
+
+describe('totals block of real estimating systems', () => {
+  it('reads a CCC-style block: hours, rates and the total', () => {
+    const text = `Line | Oper | Description | Part Number | Qty | Extended | Labor | Paint
+5 | Repl | Bumper cover w/park sensor | 1 | 890.00 | Incl. | 3.2
+6 | Add for Clear Coat | 1.3
+SUBTOTALS | 1,337.00 | 8.5 | 5.2
+ESTIMATE TOTALS
+Category | Basis | Rate | Cost $
+Parts | 1,325.00
+Body Labor | 7.5 hrs | @ | $ 48.00 /hr | 360.00
+Paint Labor | 5.2 hrs | @ | $ 48.00 /hr | 249.60
+Mechanical Labor | 1.0 hrs | @ | $ 110.00 /hr | 110.00
+Paint Supplies | 5.2 hrs | @ | $ 30.00 /hr | 156.00
+Miscellaneous | 12.00
+Subtotal | 2,212.60
+Sales Tax | $ 1,481.00 @ 7.0000 % | 103.67
+Grand Total | 2,316.27
+Deductible | 500.00
+INSURANCE PAY | 1,816.27`;
+    const out = parseDocumentText([text]);
+    expect(out.from).toBe('summary');
+    expect(out.taxRatePct).toBe(7);
+    expect(out.estimate).toMatchObject({ currency: 'USD', labourRate: 48, paintRate: 48, statedTotal: 2212.6 });
+    expect(out.estimate.items.map((i) => [i.desc, i.kind, i.hours, i.total])).toEqual([
+      ['Parts', 'part', null, 1325],
+      ['Body Labor', 'labour', 7.5, 360],
+      ['Paint Labor', 'paint', 5.2, 249.6],
+      ['Mechanical Labor', 'labour', 1, 110],
+      ['Paint Supplies', 'material', 5.2, 156],
+      ['Miscellaneous', 'other', null, 12],
+    ]);
+    expect(netOfItems(out.estimate)).toBe(2212.6);
+  });
+
+  it('stops at the grand total and ignores a supplement summary further down', () => {
+    const out = parseDocumentText([`ESTIMATE TOTALS
+Parts | 1,325.00
+Body Labor | 7.5 hrs | @ | $ 48.00 /hr | 360.00
+Paint Labor | 5.2 hrs | @ | $ 48.00 /hr | 249.60
+Subtotal | 1,934.60
+Grand Total | 1,934.60
+Deductible | 500.00
+RATE CHANGES
+Mechanical Labor | 0.5 hrs | @ | $ 70.00 /hr | 35.00
+SUPPLEMENT TOTALS
+Parts | 400.00
+Body Labor | 2.3 hrs | @ | $ 48.00 /hr | 110.40
+Grand Total | 510.40`]);
+    expect(out.estimate.items.map((i) => i.total)).toEqual([1325, 360, 249.6]);
+    expect(out.estimate.statedTotal).toBe(1934.6);
+  });
+
+  it('reads a Mitchell-style block with labour units and rates', () => {
+    const out = parseDocumentText([`Estimate Totals
+I. | Labor Subtotals | Units | Rate | Amount | Amount | Totals | II. | Part Replacement Summary | Amount
+Body | 15.7 | 46.00 | 0.00 | 0.00 | 722.20 | T | Taxable Parts | 416.91
+Bdy-S | 1.5 | 46.00 | 0.00 | 0.00 | 69.00 | T | Sales Tax | @ | 9.550% | 39.81
+Refinish | 8.1 | 46.00 | 0.00 | 10.00 | 382.60 | T
+Mechanical | 9.7 | 65.00 | 0.00 | 0.00 | 630.50 | T | Total Replacement Parts Amount | 456.72
+Taxable Labor | 1,804.30
+Labor Tax | @ | 9.550 % | 172.31
+Labor Summary | 35.0 | 1,976.61
+III. | Additional Costs | Amount | IV. | Adjustments | Amount
+Taxable Costs | 278.40 | Insurance Deductible | 500.00-
+Total Additional Costs | 304.99
+I. | Total Labor: | 1,976.61
+II. | Total Replacement Parts: | 456.72
+III. | Total Additional Costs: | 304.99
+Gross Total: | 2,738.32
+IV. | Total Adjustments: | 500.00-
+Net Total: | 2,238.32`], 'USD');
+    expect(out.from).toBe('summary');
+    expect(out.estimate.items.map((i) => [i.desc, i.kind, i.hours, i.unitPrice, i.total])).toEqual([
+      ['Body', 'labour', 15.7, 46, 722.2],
+      ['Bdy-S', 'labour', 1.5, 46, 69],
+      ['Refinish', 'paint', 8.1, 46, 382.6],
+      ['Mechanical', 'labour', 9.7, 65, 630.5],
+      ['Total Replacement Parts', 'part', null, null, 456.72],
+      ['Total Additional Costs', 'other', null, null, 304.99],
+    ]);
+    expect(out.estimate).toMatchObject({ labourRate: 46, paintRate: 46 });
+    // The grand total is the rows plus labour tax, so nothing is reported as missing.
+    expect(sumMismatch(out.estimate)).toBeNull();
+  });
+
+  it('does not call mechanical work underpaid because bodywork is', () => {
+    const { estimate } = parseDocumentText([`Parts | 1,325.00
+Body Labor | 7.5 hrs | @ | $ 48.00 /hr | 360.00
+Mechanical Labor | 1.0 hrs | @ | $ 110.00 /hr | 110.00
+Subtotal | 1,795.00`]);
+    const settings = { ...defaultSettings('USD', 0), refRates: { low: 60, mid: 90, high: 140 } };
+    const labour = audit(estimate, settings).find((f) => f.id === 'labourRate')!;
+    // Bodywork: 7.5 h at 48. Mechanical: 1 h at 110, above the low and typical rates.
+    expect(labour.amounts).toEqual({ cautious: 90, realistic: 315, optimistic: 720 });
+  });
+
+  it('reads the Audatex final calculation, printed letter by letter', () => {
+    const text = `K A L K U L A C J A K O Ń C O W A | PLN | PLN
+R O B O C I Z N A BAZA CZASOWA | 10 JC = 1 RBG
+RAZEM | 99 JC X | 70.00 PLN/RBG | 693.00
+RAZEM ROBOCIZNA ............................ | 693.00
+L A K I E R O W A N I E
+KOSZTY ROBOCIZNY | 378.00
+KOSZTY MATERIAŁU | 634.51
+RAZEM LAKIEROWANIE ......................... | 1 012.51
+C Z Ę Ś C I Z A M I E N N E | 2 277.00
+NORMALIA ( 2.0%) | 45.54
+RAZEM CZĘŚCI ZAMIENNE ...................... | 2 322.54
+K O S Z T Y N A P R A W Y BEZ VAT .......... | 4 028.05
+VAT 23.00 % | 926.45
+K O S Z T Y N A P R A W Y Z VAT ............ | 4 954.50`;
+    const out = parseDocumentText([text]);
+    expect(out.from).toBe('summary');
+    expect(out.taxRatePct).toBe(23);
+    expect(out.estimate).toMatchObject({ currency: 'PLN', labourRate: 70, statedTotal: 4028.05 });
+    expect(out.estimate.items.map((i) => [i.kind, i.hours, i.total])).toEqual([
+      ['labour', 9.9, 693],
+      ['paint', null, 378],
+      ['material', null, 634.51],
+      ['part', null, 2322.54],
+    ]);
+    expect(netOfItems(out.estimate)).toBe(4028.05);
+  });
+
+  it('leaves a plain table to the row parser', () => {
+    const out = parseDocumentText([`No. | Description | Part type | Qty / hours | Unit price | Net GBP
+PARTS
+1 | Front bumper | Non-OEM | 1 | 310.00 | 310.00
+LABOUR
+5 | Replace bumper and headlamp | 3.4 | 38.00 | 129.20
+PAINT
+8 | Paint materials | 1 | 150.00 | 150.00
+TOTAL REPAIR COST NET | 589.20`]);
+    expect(out.from).toBe('rows');
+    expect(out.estimate.items.map((i) => i.kind)).toEqual(['part', 'labour', 'material']);
+    expect(out.estimate.statedTotal).toBe(589.2);
+  });
+
+  it('builds lines and cells from the text runs of a PDF page', () => {
+    const run = (str: string, x: number, y: number) => ({ str, x, y, width: str.length * 4.4, height: 8 });
+    const lines = layoutLines([run('Body Labor', 40, 500), run('5.7 hrs', 200, 500), run('@', 250, 500.4), run('$ 52.00 /hr', 290, 500), run('296.40', 400, 500), run('ESTIMATE', 40, 520), run('TOTALS', 78, 520), run('Parts', 40, 510), run('2,166.78', 392, 510)]);
+    expect(lines).toEqual(['ESTIMATE TOTALS', 'Parts | 2,166.78', 'Body Labor | 5.7 hrs | @ | $ 52.00 /hr | 296.40']);
+    expect(hasTextLayer(lines)).toBe(false);
+  });
+});
+

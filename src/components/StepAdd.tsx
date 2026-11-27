@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, deviceStatus, DeviceTimeoutError, firebaseConfigured, imagePart, NotConfiguredError, run } from '../lib/ai';
-import { emptyItem, mergeEstimates, normalizeEstimate, parseModelJson, parsePastedText, parseTranscription, READ_PROMPT, TRANSCRIBE_PROMPT, TRANSCRIBE_TEXT_PROMPT } from '../lib/extract';
+import { emptyItem, mergeEstimates, normalizeEstimate, parseDocumentText, parseModelJson, parsePastedText, READ_PROMPT, TRANSCRIBE_PROMPT, TRANSCRIBE_TEXT_PROMPT } from '../lib/extract';
 import { filesToPages, MAX_PAGES, tilesOf, type PageImage } from '../lib/files';
+import { sumMismatch } from '../lib/audit';
 import { redact } from '../lib/redact';
 import { sampleEstimate, sampleQuote } from '../lib/sample';
 import type { Estimate, InferenceLogEntry } from '../lib/types';
@@ -14,7 +15,8 @@ interface Props {
   hasEstimate: boolean;
   /** Currency assumed when the on-device transcription does not name one. */
   fallbackCurrency: string;
-  onEstimate: (estimate: Estimate, raw?: string) => void;
+  /** `fromPdf` is set when `raw` is the PDF's own text and not something a model wrote. */
+  onEstimate: (estimate: Estimate, raw?: string, fromPdf?: boolean) => void;
   onLog: (entry: Omit<InferenceLogEntry, 'at'>) => void;
   onReset: () => void;
 }
@@ -81,7 +83,7 @@ export function StepAdd({ variant = 'estimate', allowCloud, hasEstimate, fallbac
       try {
         const texts = await device();
         raw.current.push(...texts);
-        const estimate = parseTranscription(texts, fallbackCurrency);
+        const { estimate } = parseDocumentText(texts, fallbackCurrency);
         onLog({ step: 'read', source: 'on_device', redactions: 0 });
         return estimate;
       } catch (err) {
@@ -97,6 +99,20 @@ export function StepAdd({ variant = 'estimate', allowCloud, hasEstimate, fallbac
   const readPages = async () => {
     const signal = begin();
     try {
+      // A PDF made by a computer carries its own text. It is exact, so plain code reads it
+      // and no model sees the document. Photos and scans go to the model below.
+      const texts = pages.filter((p) => p.text).map((p) => p.text as string);
+      if (texts.length > 0) {
+        const { estimate, from } = parseDocumentText(texts, fallbackCurrency);
+        // A totals block is trusted as it stands. Plain rows are trusted when they add up
+        // to the printed total; otherwise the layout was not understood and a model reads the page.
+        const addsUp = estimate.items.length >= 2 && estimate.statedTotal != null && sumMismatch(estimate) == null;
+        if (from === 'summary' || addsUp) {
+          onLog({ step: 'read', source: 'none', redactions: 0, note: 'text_layer' });
+          onEstimate(estimate, texts.join('\n\n'), true);
+          return;
+        }
+      }
       const results: Estimate[] = [];
       for (let n = 0; n < pages.length; n += 1) {
         const page = pages[n];

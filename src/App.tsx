@@ -24,6 +24,8 @@ export function App() {
   const [deselected, setDeselected] = useState<Set<string>>(new Set());
   const [tier, setTier] = useState<Tier>('realistic');
   const [rawRead, setRawRead] = useState<string | null>(null);
+  const [rawFromPdf, setRawFromPdf] = useState(false);
+  const [quoteFromPdf, setQuoteFromPdf] = useState(false);
   const [quote, setQuote] = useState<Estimate | null>(null);
   const [quoteRaw, setQuoteRaw] = useState<string | null>(null);
 
@@ -41,8 +43,9 @@ export function App() {
   }, []);
 
   const loadEstimate = useCallback(
-    (next: Estimate, raw?: string) => {
+    (next: Estimate, raw?: string, fromPdf?: boolean) => {
       setRawRead(raw ?? null);
+      setRawFromPdf(Boolean(fromPdf));
       const code = countryForCurrency(next.currency, country);
       setCountry(code);
       setEstimate(next);
@@ -103,20 +106,21 @@ export function App() {
 
         {estimate && (
           <>
-            <StepReview estimate={estimate} onChange={setEstimate} onCurrency={changeCurrency} country={country} onCountry={changeCountry} settings={settings} onSettings={setSettings} rawRead={rawRead} />
+            <StepReview estimate={estimate} onChange={setEstimate} onCurrency={changeCurrency} country={country} onCountry={changeCountry} settings={settings} onSettings={setSettings} rawRead={rawRead} rawFromPdf={rawFromPdf} />
             <StepAdd
               variant="quote"
               allowCloud={allowCloud}
               fallbackCurrency={estimate.currency}
-              onEstimate={(next, raw) => {
+              onEstimate={(next, raw, fromPdf) => {
                 setQuote(next);
                 setQuoteRaw(raw ?? null);
+                setQuoteFromPdf(Boolean(fromPdf));
               }}
               onLog={addLog}
               hasEstimate={quote != null}
               onReset={() => setQuote(null)}
             />
-            {quote && comparison && <StepCompare estimate={estimate} quote={quote} onQuote={setQuote} comparison={comparison} rawRead={quoteRaw} />}
+            {quote && comparison && <StepCompare estimate={estimate} quote={quote} onQuote={setQuote} comparison={comparison} rawRead={quoteRaw} rawFromPdf={quoteFromPdf} />}
             <StepFindings estimate={estimate} findings={findings} selected={selected} onToggle={toggle} />
             <StepLetter estimate={estimate} findings={findings} selected={selected} comparison={comparison && comparison.gap > 0 ? comparison : null} tier={tier} onTier={setTier} allowCloud={allowCloud} onLog={addLog} />
           </>

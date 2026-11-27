@@ -1,9 +1,13 @@
+import { hasTextLayer, layoutLines, type TextRun } from './pdftext';
+
 /** Turns photos and PDFs into JPEG pages in the browser, so nothing is uploaded to prepare them. */
 
 export interface PageImage {
   base64: string;
   mimeType: 'image/jpeg';
   previewUrl: string;
+  /** The page's own text, when the PDF carries one. It is exact, unlike anything read from the image. */
+  text?: string;
 }
 
 const MAX_SIDE = 1600;
@@ -39,7 +43,15 @@ async function pdfToPages(file: File): Promise<PageImage[]> {
     canvas.width = Math.round(viewport.width);
     canvas.height = Math.round(viewport.height);
     await page.render({ canvas, canvasContext: canvas.getContext('2d')!, viewport }).promise;
-    pages.push(canvasToPage(canvas));
+    const out = canvasToPage(canvas);
+    const content = await page.getTextContent();
+    const runs: TextRun[] = [];
+    for (const item of content.items) {
+      if ('str' in item) runs.push({ str: item.str, x: item.transform[4], y: item.transform[5], width: item.width, height: item.height || Math.abs(item.transform[3]) });
+    }
+    const lines = layoutLines(runs);
+    if (hasTextLayer(lines)) out.text = lines.join('\n');
+    pages.push(out);
   }
   return pages;
 }

@@ -13,11 +13,12 @@ interface Props {
   onSettings: (settings: AuditSettings) => void;
   /** What the on-device model wrote, shown so the user can see where a line came from. */
   rawRead: string | null;
+  rawFromPdf?: boolean;
 }
 
 const CURRENCIES = ['PLN', 'EUR', 'GBP', 'USD', 'CHF', 'CZK', 'SEK', 'NOK', 'DKK', 'CAD', 'AUD'];
 
-export function StepReview({ estimate, onChange, onCurrency, country, onCountry, settings, onSettings, rawRead }: Props) {
+export function StepReview({ estimate, onChange, onCurrency, country, onCountry, settings, onSettings, rawRead, rawFromPdf }: Props) {
   const { t, lang } = useT();
   const currencies = CURRENCIES.includes(estimate.currency) ? CURRENCIES : [estimate.currency, ...CURRENCIES];
 
@@ -28,7 +29,7 @@ export function StepReview({ estimate, onChange, onCurrency, country, onCountry,
 
       {rawRead && (
         <details className="raw">
-          <summary>{t('rawRead')}</summary>
+          <summary>{t(rawFromPdf ? 'rawPdf' : 'rawRead')}</summary>
           <pre className="live">{rawRead}</pre>
         </details>
       )}
