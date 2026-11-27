@@ -753,6 +753,11 @@ describe('letter rewording keeps the point of the letter', () => {
     expect(applyPolish(parts, agreeing)).toMatchObject({ ok: false, reason: 'meaning' });
   });
 
+  it('accepts the friendlier version Gemini Nano wrote, which still refuses and still asks for payment', () => {
+    const friendly = "I've carefully reviewed the repair estimate provided for this claim. While I appreciate you taking the time to provide it, I haven't yet been able to fully accept it as a complete settlement, as it doesn't account for certain repair costs.\n\n---\n\nPlease remit payment for the remaining amount within 14 days, or please provide a detailed written explanation, outlining item by item why a different amount is necessary.";
+    expect(applyPolish(parts, friendly)).toMatchObject({ ok: true, changed: true });
+  });
+
   it('accepts a firmer version that keeps both', () => {
     const firm = 'I have reviewed the repair estimate for this claim and I do not accept it as full settlement: it understates the cost of the repair.\n---\nI expect payment of the amount above within 14 days, or a written explanation of your refusal, item by item.';
     expect(applyPolish(parts, firm)).toMatchObject({ ok: true, changed: true });

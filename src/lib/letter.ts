@@ -262,7 +262,7 @@ export function verifyRewrite(draft: string, rewritten: string): RewriteCheck {
 }
 
 /** What each paragraph has to keep saying, whatever the tone: a refusal in the first, a demand to pay in the second. */
-const REFUSAL = /\b(not|cannot|can't|don't|won't)\s+(\w+\s+){0,3}(accept|agree)|disagree|reject|dispute|object\b|nie\s+(\S+\s+){0,3}(akcept|zgadzam|przyjmuj|uznaj)|kwestionuj|odrzucam|sprzeciw/i;
+const REFUSAL = /(\bnot|\bcannot|n't)\s+(\w+\s+){0,5}(accept|agree)|disagree|reject|dispute|object\b|nie\s+(\S+\s+){0,3}(akcept|zgadzam|przyjmuj|uznaj)|kwestionuj|odrzucam|sprzeciw/i;
 const DEMAND = /\b(pay|payment|remit|settle)\b|wypłat|zapłat|dopłat|uregulow/i;
 
 export type PolishResult = { ok: true; parts: LetterParts; changed: boolean } | { ok: false; reason: NonNullable<RewriteCheck['reason']> | 'shape' | 'meaning'; value?: string };
