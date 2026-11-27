@@ -10,7 +10,7 @@ A repair estimate carries a name, an address, a number plate, a VIN and a claim 
 
 ## What it does
 
-1. **Reads the estimate.** A photo, a PDF or pasted text becomes a table of lines: parts, labour, paint, materials and deductions. PDFs are rendered to images in the browser, so they can be read on-device too.
+1. **Reads the estimate.** A photo or a PDF becomes a table of lines: parts, labour, paint, materials and deductions. PDFs are rendered to images in the browser, so they can be read on-device too. Pasted text needs no model at all; plain code reads it.
 2. **Lets you correct it.** Every line is editable. The audit never runs on text the user has not seen.
 3. **Finds what is missing.** A rule engine written in plain TypeScript compares the estimate with hourly rates the user enters and lists the shortfalls: labour rate, paint rate, depreciation and discounts, VAT. It also raises questions that have no amount: non-original parts, missing calibration, missing wheel alignment, totals that do not add up.
 4. **Adapts to the country.** The country of the claim sets the currency and the default VAT rate; both stay editable.
@@ -21,7 +21,8 @@ A repair estimate carries a name, an address, a number plate, a VIN and a claim 
 
 | Step | Who does it | Why |
 | --- | --- | --- |
-| Reading the document | Model (on-device first) | Layouts differ between insurers; this is what a multimodal model is good at |
+| Reading a photo or PDF | Model (on-device first) | Layouts differ between insurers; this is what a multimodal model is good at |
+| Reading pasted text | Code; a model only if the code finds no priced lines | Typed figures are exact already |
 | Calculating amounts | Code | Amounts must be reproducible and explainable |
 | Drafting the letter | Code | Every figure comes from the audit |
 | Improving the wording | Model (on-device first) | Optional |
@@ -30,7 +31,7 @@ A repair estimate carries a name, an address, a number plate, a VIN and a claim 
 Two guards keep the model away from the numbers:
 
 - The model never calculates. It returns lines; `src/lib/audit.ts` does the arithmetic.
-- A rewritten letter is accepted only if it contains exactly the numbers and placeholders of the draft (`verifyRewrite` in `src/lib/letter.ts`). Otherwise it is discarded and the plain draft is shown.
+- A rewritten letter is accepted only if it contains exactly the numbers and placeholders of the draft (`verifyRewrite` in `src/lib/letter.ts`). Otherwise it is discarded, the app names the figure that failed, and the plain draft is shown.
 
 ## Hybrid routing
 
@@ -48,7 +49,7 @@ The panel at the top of the page logs each request with the place it ran, taken 
 The two paths read a page differently.
 
 - **Cloud.** The whole page goes to Gemini in one request, in JSON mode.
-- **Device.** Gemini Nano copies a table well and restructures it badly, and it scales every image down to a small fixed size. So the app trims the white margins, cuts the page into wide overlapping tiles, and asks the model only to transcribe each tile row by row. The transcription is streamed to the page as it is written. Plain TypeScript then sorts the rows into parts, labour, paint, materials and deductions (`parseTranscription` in `src/lib/extract.ts`) and drops rows that two tiles share. The unit tests for that parser use transcriptions Gemini Nano actually produced, misreadings included.
+- **Device.** Gemini Nano copies a table well and restructures it badly, and it scales every image down to a small fixed size. So the app trims the white margins, cuts the page into wide overlapping tiles, and asks the model only to transcribe each tile row by row. The transcription is streamed to the page as it is written. Plain TypeScript then sorts the rows into parts, labour, paint, materials and deductions (`parseTranscription` in `src/lib/extract.ts`) and drops rows that two tiles share or that the model wrote twice. The unit tests for that parser use transcriptions Gemini Nano actually produced, misreadings included.
 
 The printed total doubles as a checksum. Gemini Nano sometimes copies a printed "-1 593,00" as two cells, "-1" and "593,00". The parser keeps both readings and takes the one that makes the lines add up to the total; a line it cannot settle is highlighted for the user.
 
@@ -70,11 +71,9 @@ Without a `.env` file the app starts in demo mode: the sample estimate, the audi
 
 ### On-device model
 
-On-device inference needs Chrome on desktop, version 139 or newer:
+On-device inference needs a recent Chrome on a desktop that meets Chrome's hardware requirements for Gemini Nano. Open the app; the panel at the top says whether the model is ready. If it offers **Download the on-device model**, press it and wait; the first download takes several minutes. If the model is reported as ready and still does not answer, restart Chrome.
 
-1. Open `chrome://flags/#prompt-api-for-gemini-nano-multimodal-input` and set it to **Enabled**.
-2. Restart Chrome.
-3. Open the app and press **Download the on-device model**. The first download takes several minutes.
+Older Chrome versions need `chrome://flags/#prompt-api-for-gemini-nano-multimodal-input` set to **Enabled**.
 
 In other browsers the app works through the cloud path, once the user allows it.
 
@@ -84,15 +83,17 @@ In other browsers the app works through the cloud path, once the user allows it.
 npm test
 ```
 
-The tests cover the audit arithmetic, number parsing, the letter guard and redaction.
+The tests cover the audit arithmetic, number parsing, the transcription parser, the pasted-text parser, the letter guard and redaction.
+
+`docs/samples` holds two fictional estimates to try the app with, one in English (GBP) and one in Polish (PLN).
 
 ## Limits
 
 - The hourly rates shipped with the app are examples, not market data. The user is asked to replace them.
 - The missing-operation checks are keyword heuristics. They raise questions; they do not put a price on anything.
 - Redaction is pattern-based. It does not recognise names or street addresses.
-- On a laptop without a discrete GPU a tile takes about 45 seconds, so a full page takes a few minutes on the device. Up to six pages are read.
-- The on-device model misreads some words, especially with diacritics. Amounts and hours came through correctly in our tests, and the user is asked to check every line.
+- On-device reading is slow. On a laptop with integrated graphics (Intel Iris Xe) a one-page sample takes about 100 seconds, and rewriting the letter about two and a half minutes. Up to six pages are read.
+- The on-device model misreads some words, especially with diacritics, and now and then an amount. The printed total catches the amounts it can; the user is asked to check every line before the audit runs.
 - This is information, not legal advice.
 
 ## Licence
