@@ -706,6 +706,11 @@ describe('rewording the letter', () => {
   it('rejects an answer with a changed deadline, a new amount or the wrong shape', () => {
     expect(applyPolish(parts, 'I do not accept the estimate as full settlement for the reasons below.\n---\nPlease pay within 7 days or explain in writing why you refuse.')).toMatchObject({ ok: false });
     expect(applyPolish(parts, 'I do not accept the estimate; you owe me 5,000 more as shown below.\n---\nPlease pay within 14 days or explain in writing why you refuse.')).toMatchObject({ ok: false, reason: 'number_added' });
+    // Real on-device output: blanks to fill in, a currency sign and the deadline in words.
+    expect(
+      applyPolish(parts, 'I have reviewed the repair estimate issued for claim number ______. I do not accept this as full settlement due to discrepancies in the quoted repair costs.\n\n---\n\nPlease remit the remaining balance of $_______ within fourteen days. If you object to this amount, please provide a written explanation.'),
+    ).toMatchObject({ ok: false });
+    expect(applyPolish(parts, 'I have reviewed the estimate and I do not accept it as full settlement, for the reasons below.\n---\nPlease pay within fourteen days or explain in writing why you refuse.')).toMatchObject({ ok: false, reason: 'number_missing', value: '14' });
     expect(applyPolish(parts, 'Dear insurer, here is one long paragraph without the separator you were asked for, within 14 days.')).toMatchObject({ ok: false, reason: 'shape' });
   });
 });

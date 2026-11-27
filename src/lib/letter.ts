@@ -194,6 +194,7 @@ Rules:
 - Keep every number exactly as written.
 - Do not add facts, amounts, dates, laws or threats.
 - Do not add a greeting, a signature or a list.
+- Do not leave blanks to fill in, and do not mention a claim number or a sum of money.
 Return the first paragraph, then a line with only three dashes (---), then the second paragraph. Nothing else.`,
   pl: `Przeredaguj dwa poniższe akapity. Otwierają i zamykają pismo osoby prywatnej do zakładu ubezpieczeń w sprawie kosztorysu naprawy. Mają być jasne, stanowcze i uprzejme. Pisz po polsku.
 Zasady:
@@ -201,6 +202,7 @@ Zasady:
 - Zachowaj każdą liczbę dokładnie tak, jak w tekście.
 - Nie dodawaj faktów, kwot, dat, przepisów ani gróźb.
 - Nie dodawaj powitania, podpisu ani wyliczeń.
+- Nie zostawiaj pustych miejsc do uzupełnienia i nie wspominaj o numerze szkody ani o kwocie.
 Zwróć pierwszy akapit, potem linię zawierającą tylko trzy myślniki (---), potem drugi akapit. Nic więcej.`,
 };
 
@@ -250,7 +252,16 @@ export function applyPolish(parts: LetterParts, answer: string): PolishResult {
     .map((piece) => piece.trim());
   if (pieces.length !== 2 || pieces.some((piece) => piece.length < 20 || /\n\s*[-*\d]+[.)]?\s/.test(piece) || /\[/.test(piece))) return { ok: false, reason: 'shape' };
   const [open, close] = pieces.map((piece) => piece.replace(/\s*\n\s*/g, ' '));
-  const check = verifyRewrite(`${parts.open}\n${parts.close}`, `${open}\n${close}`);
+  const before = `${parts.open}\n${parts.close}`;
+  const after = `${open}\n${close}`;
+  // Blanks to fill in, or a currency sign that the two paragraphs never had, mean the model
+  // started writing about amounts. A deadline written out in words ("fourteen days") is a changed figure.
+  if (/_{2,}|\.{4,}|\bX{3,}\b/.test(after) || (/[$£€]|\b(PLN|USD|EUR|GBP)\b|\bz[lł]\b/.test(after) && !/[$£€]|\b(PLN|USD|EUR|GBP)\b|\bz[lł]\b/.test(before))) return { ok: false, reason: 'shape' };
+  const check = verifyRewrite(before, after);
   if (!check.ok) return { ok: false, reason: check.reason ?? 'number_added', value: check.value };
+  // Every figure of the two paragraphs has to come back as a figure, in the same order.
+  const figures = (text: string): string[] => text.match(/\d+/g) ?? [];
+  const lost = figures(before).find((n) => !figures(after).includes(n));
+  if (lost || figures(before).join(' ') !== figures(after).join(' ')) return { ok: false, reason: 'number_missing', value: lost ?? figures(before)[0] };
   return { ok: true, parts: { ...parts, open, close } };
 }
