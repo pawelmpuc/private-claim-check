@@ -1,3 +1,4 @@
+import { sumMismatch } from '../lib/audit';
 import type { Comparison } from '../lib/compare';
 import type { Key } from '../lib/i18n';
 import { money } from '../lib/letter';
@@ -23,6 +24,11 @@ export function StepCompare({ estimate, quote, onQuote, comparison, rawRead }: P
   return (
     <section className="card card-optional" aria-labelledby="stepc">
       <h2 id="stepc">{t('cmpTitle')}</h2>
+      {sumMismatch(quote) && (
+        <p className="error" role="alert">
+          {t('sumMismatch', { lines: fmt(sumMismatch(quote)!.lines), stated: fmt(sumMismatch(quote)!.stated) })}
+        </p>
+      )}
       {quote.currency !== estimate.currency && <p className="notice">{t('cmpCurrency', { a: estimate.currency, b: quote.currency })}</p>}
 
       <div className="cmp" role="table" aria-label={t('cmpTitle')}>
@@ -74,7 +80,7 @@ export function StepCompare({ estimate, quote, onQuote, comparison, rawRead }: P
         </>
       )}
 
-      <details className="quote-lines" open={quote.items.some((i) => i.check)}>
+      <details className="quote-lines" open={quote.items.some((i) => i.check) || sumMismatch(quote) != null || undefined}>
         <summary>{t('quoteLines')}</summary>
         <p className="notice">{t('quoteCheck')}</p>
         {rawRead && (
@@ -87,7 +93,7 @@ export function StepCompare({ estimate, quote, onQuote, comparison, rawRead }: P
           <NumberField label={t('labourRate')} value={quote.labourRate} onChange={(v) => onQuote({ ...quote, labourRate: v })} />
           <NumberField label={t('paintRate')} value={quote.paintRate} onChange={(v) => onQuote({ ...quote, paintRate: v })} />
         </div>
-        <LinesTable estimate={quote} onChange={onQuote} label={t('quoteLines')} />
+        <LinesTable estimate={quote} onChange={onQuote} label={t('quoteLines')} quiet />
       </details>
     </section>
   );

@@ -78,6 +78,13 @@ export function netOfItems(estimate: Estimate): number {
   );
 }
 
+/** The gap between the lines and the printed total, when it is too large to be rounding. Null when they agree. */
+export function sumMismatch(estimate: Estimate): { lines: number; stated: number } | null {
+  if (estimate.statedTotal == null) return null;
+  const lines = netOfItems(estimate);
+  return Math.abs(lines - estimate.statedTotal) > Math.max(1, estimate.statedTotal * 0.01) ? { lines, stated: estimate.statedTotal } : null;
+}
+
 /**
  * With a workshop quote that is higher than the estimate, the difference between the two
  * replaces the rate and deduction rules: the quote already prices them.

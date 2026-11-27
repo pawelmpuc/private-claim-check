@@ -181,6 +181,34 @@ interface Row {
   numbered: string | null;
 }
 
+const isText = (cell: string) => !NUMERIC_CELL.test(cell) && !PERCENT_CELL.test(cell) && qualityOf(cell) == null;
+
+/**
+ * The on-device model sometimes writes a whole tile as one line. A line with more cells
+ * than one row can hold is cut back into rows: at a row number followed by a description,
+ * or at a description that follows an amount.
+ */
+function splitLongLine(line: string): string[] {
+  const cells = line.split('|').map((c) => c.trim()).filter((c) => c !== '' && !/^:?-+:?$/.test(c));
+  if (cells.length <= 8) return [line];
+  const rows: string[][] = [[]];
+  let numberAt = -1;
+  for (let i = 0; i < cells.length; i += 1) {
+    const cell = cells[i];
+    const current = rows[rows.length - 1];
+    const rowNumber = /^\d{1,3}\.?$/.test(cell) && i + 1 < cells.length && isText(cells[i + 1]);
+    const afterAmount = i > 0 && isText(cell) && NUMERIC_CELL.test(cells[i - 1]) && numberAt !== i - 1;
+    if ((rowNumber || afterAmount) && current.length > 0) rows.push([]);
+    if (rowNumber) numberAt = i;
+    rows[rows.length - 1].push(cell);
+  }
+  return rows.map((row) => {
+    // Padding the model adds at the end of a row, such as "| 0 | | 0 |".
+    while (row.length > 3 && /^0$/.test(row[row.length - 1])) row.pop();
+    return row.join(' | ');
+  });
+}
+
 function parseRows(text: string, state: { section: ItemKind | null; total: number | null; currency: string | null }): Row[] {
   const rows: Row[] = [];
   const currency = text.match(/\b(PLN|EUR|GBP|USD|CHF|CZK)\b|z[lł]\b|€|£/i)?.[0];
@@ -188,7 +216,7 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
     const c = currency.toUpperCase();
     state.currency = c === '€' ? 'EUR' : c === '£' ? 'GBP' : /^Z/.test(c) ? 'PLN' : c;
   }
-  for (const rawLine of text.split(/\r?\n/)) {
+  for (const rawLine of text.split(/\r?\n/).flatMap(splitLongLine)) {
     const line = rawLine.replace(/\*\*|`/g, '').replace(/^\s*[-*>]\s+/, '').trim();
     if (!line) continue;
     let cells = line.split('|').map((c) => c.trim()).filter((c) => c !== '' && !/^:?-+:?$/.test(c));

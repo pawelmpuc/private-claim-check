@@ -325,6 +325,38 @@ Total net £850.20`);
     expect(parsePastedText('The insurer offered me about 3000 for the repair and I think it is too low.')).toBeNull();
   });
 
+  it('cuts a tile written as one line back into rows', () => {
+    // Real output for the sample quote: the whole first tile came back without a line break.
+    const est = parseTranscription([
+      'No. Q-2026-0457 | Date: 19/11/2026 | Valid for 30 days Customer: Jane Sample, 1 Test Street, Sampletown AB1 2CD, tel. 07700 900123 Vehicle: passenger car, 2021, reg. AB21 XYZ, VIN WWWZZZIZKAWI123456 | Labour rates: bodywork and mechanical 72.00 GBP per hour, paint 75.00 GBP per hour | No. | Description | Part type | Qty / hours | Unit price | Net GBP | 1 | Front bumper | OEM | 1 | 465.00 | 465.00 | 2 | Left LED headlamp | OEM | 1 | 720.00 | 720.00 | 3 | Left front wing | OEM | 1 | 285.00 | 285.00 | 4 | Left front suspension arm | OEM | 1 | 160.00 | 160.00 | 0 |  |  |  |  |  | 0 |',
+      `Left front suspension arm | OEM | 1 | 160.00
+LABOUR | | |
+Replace bumper and headlamp | 4.0 | 72.00 | 288.00
+Replace wing and suspension arm | 5.0 | 72.00 | 360.00
+PAINT | | |
+Paint bumper and wing | 6.0 | 75.00 | 450.00
+Paint materials | 1 | 195.00 | 195.00
+ADDITIONAL WORK | | |
+Headlamp calibration | 1 | 90.00 | 90.00
+Wheel alignment | 1 | 65.00 | 65.00
+TOTAL NET | 3,078.00`,
+    ]);
+    expect(est.items.map((i) => [i.desc, i.kind, i.total])).toEqual([
+      ['Front bumper', 'part', 465],
+      ['Left LED headlamp', 'part', 720],
+      ['Left front wing', 'part', 285],
+      ['Left front suspension arm', 'part', 160],
+      ['Replace bumper and headlamp', 'labour', 288],
+      ['Replace wing and suspension arm', 'labour', 360],
+      ['Paint bumper and wing', 'paint', 450],
+      ['Paint materials', 'material', 195],
+      ['Headlamp calibration', 'other', 90],
+      ['Wheel alignment', 'other', 65],
+    ]);
+    expect(est.statedTotal).toBe(3078);
+    expect(netOfItems(est)).toBe(3078);
+  });
+
   it('marks a doubtful amount when there is no total to settle it', () => {
     const est = parseTranscription(['Potrącenia | Amortyzacja części 30% | -1 | 593,00 | -593,00']);
     expect(est.items[0]).toMatchObject({ kind: 'deduction', total: 593, check: true });

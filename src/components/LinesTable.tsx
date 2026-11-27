@@ -1,4 +1,6 @@
+import { sumMismatch } from '../lib/audit';
 import { emptyItem } from '../lib/extract';
+import { money } from '../lib/letter';
 import type { Key } from '../lib/i18n';
 import type { Estimate, EstimateItem, ItemKind, PartQuality } from '../lib/types';
 import { useT } from '../lib/useT';
@@ -22,13 +24,20 @@ export function NumberField({ label, value, onChange, step = 'any' }: { label: s
 }
 
 /** The editable lines of an estimate or a quote. */
-export function LinesTable({ estimate, onChange, label }: { estimate: Estimate; onChange: (estimate: Estimate) => void; label: string }) {
-  const { t } = useT();
+export function LinesTable({ estimate, onChange, label, quiet = false }: { estimate: Estimate; onChange: (estimate: Estimate) => void; label: string; quiet?: boolean }) {
+  const { t, lang } = useT();
+  // `quiet` is for a caller that shows the warning itself.
+  const mismatch = quiet ? null : sumMismatch(estimate);
   const patchItem = (id: string, patch: Partial<EstimateItem>) =>
     onChange({ ...estimate, items: estimate.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) });
 
   return (
     <>
+      {mismatch && (
+        <p className="error" role="alert">
+          {t('sumMismatch', { lines: money(mismatch.lines, estimate.currency, lang), stated: money(mismatch.stated, estimate.currency, lang) })}
+        </p>
+      )}
       {estimate.items.some((i) => i.check) && <p className="notice">{t('checkLine')}</p>}
       <div className="table" role="table" aria-label={label}>
         <div className="tr th" role="row">
