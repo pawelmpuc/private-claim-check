@@ -738,3 +738,23 @@ describe('remote settings', () => {
     expect(tuning).toEqual({ cloudModel: 'gemini-3.5-flash', deviceTimeoutS: 120 });
   });
 });
+
+describe('letter rewording keeps the point of the letter', () => {
+  const estimate = sampleEstimate();
+  const findings = audit(estimate, defaultSettings('PLN', 23));
+  const parts = letterParts(estimate, findings, new Set(findings.map((f) => f.id)), 'realistic', 'en');
+
+  it('rejects what Gemini Nano wrote on 27 Nov: a numbered opening and a closing that no longer asks for payment', () => {
+    const numbered = '1. I have reviewed the repair estimate issued for this claim. I must inform you that I do not accept it as complete settlement because it insufficiently addresses the necessary repairs.\n---\nPlease pay the amount above within 14 days, or explain your refusal in writing.';
+    expect(applyPolish(parts, numbered)).toMatchObject({ ok: false, reason: 'shape' });
+    const soft = 'I have reviewed the repair estimate issued for this claim and I do not accept it as complete settlement.\n---\nPlease confirm your understanding of this matter within 14 days, and provide a written explanation of any discrepancy.';
+    expect(applyPolish(parts, soft)).toMatchObject({ ok: false, reason: 'meaning' });
+    const agreeing = 'Thank you for the repair estimate, which I have reviewed with interest.\n---\nPlease pay the amount above within 14 days, or explain in writing why you refuse.';
+    expect(applyPolish(parts, agreeing)).toMatchObject({ ok: false, reason: 'meaning' });
+  });
+
+  it('accepts a firmer version that keeps both', () => {
+    const firm = 'I have reviewed the repair estimate for this claim and I do not accept it as full settlement: it understates the cost of the repair.\n---\nI expect payment of the amount above within 14 days, or a written explanation of your refusal, item by item.';
+    expect(applyPolish(parts, firm)).toMatchObject({ ok: true, changed: true });
+  });
+});

@@ -195,7 +195,8 @@ Rules:
 - Do not add facts, amounts, dates, laws or threats.
 - Do not add a greeting, a signature or a list.
 - Do not leave blanks to fill in, and do not mention a claim number or a sum of money.
-- A numbered list of points follows the first paragraph, so its last sentence must lead into that list.
+- The first paragraph must still say that the estimate is not accepted. The second must still ask the insurer to pay within the same number of days.
+- Do not number the paragraphs.
 Return the first paragraph, then a line with only three dashes (---), then the second paragraph. Nothing else.`,
   pl: `Przeredaguj dwa poniższe akapity. Otwierają i zamykają pismo osoby prywatnej do zakładu ubezpieczeń w sprawie kosztorysu naprawy. {TONE} Pisz po polsku.
 Zasady:
@@ -204,7 +205,8 @@ Zasady:
 - Nie dodawaj faktów, kwot, dat, przepisów ani gróźb.
 - Nie dodawaj powitania, podpisu ani wyliczeń.
 - Nie zostawiaj pustych miejsc do uzupełnienia i nie wspominaj o numerze szkody ani o kwocie.
-- Po pierwszym akapicie następuje numerowana lista punktów, więc jego ostatnie zdanie ma do niej prowadzić.
+- Pierwszy akapit nadal ma mówić, że kosztorys nie jest akceptowany. Drugi nadal ma wzywać ubezpieczyciela do zapłaty w tym samym terminie.
+- Nie numeruj akapitów.
 Zwróć pierwszy akapit, potem linię zawierającą tylko trzy myślniki (---), potem drugi akapit. Nic więcej.`,
 };
 
@@ -259,7 +261,11 @@ export function verifyRewrite(draft: string, rewritten: string): RewriteCheck {
   return { ok: true };
 }
 
-export type PolishResult = { ok: true; parts: LetterParts; changed: boolean } | { ok: false; reason: NonNullable<RewriteCheck['reason']> | 'shape'; value?: string };
+/** What each paragraph has to keep saying, whatever the tone: a refusal in the first, a demand to pay in the second. */
+const REFUSAL = /\b(not|cannot|can't|don't|won't)\s+(\w+\s+){0,3}(accept|agree)|disagree|reject|dispute|object\b|nie\s+(\S+\s+){0,3}(akcept|zgadzam|przyjmuj|uznaj)|kwestionuj|odrzucam|sprzeciw/i;
+const DEMAND = /\b(pay|payment|remit|settle)\b|wypłat|zapłat|dopłat|uregulow/i;
+
+export type PolishResult = { ok: true; parts: LetterParts; changed: boolean } | { ok: false; reason: NonNullable<RewriteCheck['reason']> | 'shape' | 'meaning'; value?: string };
 
 /** Puts the model's two paragraphs into the letter, if they pass the checks. */
 export function applyPolish(parts: LetterParts, answer: string): PolishResult {
@@ -268,7 +274,10 @@ export function applyPolish(parts: LetterParts, answer: string): PolishResult {
     .split(/\n\s*-{3,}\s*\n/)
     .map((piece) => piece.trim());
   if (pieces.length !== 2 || pieces.some((piece) => piece.length < 20 || /\n\s*[-*\d]+[.)]?\s/.test(piece) || /\[/.test(piece))) return { ok: false, reason: 'shape' };
+  // A model that numbers the paragraphs has started writing a list of its own.
+  if (pieces.some((piece) => /^\s*(\d+[.)]|[-*•])\s/.test(piece))) return { ok: false, reason: 'shape' };
   const [open, close] = pieces.map((piece) => piece.replace(/\s*\n\s*/g, ' '));
+  if (!REFUSAL.test(open) || !DEMAND.test(close)) return { ok: false, reason: 'meaning' };
   const before = `${parts.open}\n${parts.close}`;
   const after = `${open}\n${close}`;
   // Blanks to fill in, or a currency sign that the two paragraphs never had, mean the model
