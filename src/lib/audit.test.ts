@@ -189,6 +189,47 @@ Rabat | | | 0,00`,
     expect(est.labourRate).toBe(95);
   });
 
+  it('uses the printed total to settle an amount the model split in two', () => {
+    // Real output: the printed "-1 593,00" came back as the cells "-1" and "593,00".
+    const est = parseTranscription([
+      `CURRENCY: PLN
+**CZĘŚCI ZAMIENNE** | Zderzak przędni | Q | 1 | 1 240,00 | 1 240,00 |
+|---|---|---|---|---|---|
+|---| Reflektor lewy LED | O | 1 | 2 890,00 | 2 890,00 |
+|---| Blotnik przedni lewy | PJ | 1 | 760,00 | 760,00 |
+|---| Wahacz przedni | Q | 1 | 420,00 | 420,00 |
+|---| **ROBOTCZINA** | Wymiana zderzaka i reflektora | 3,4 | 95,00 | 323,00 |
+**Razem** | | | | | **1 916,00** |`,
+      `Robocizna | Wymiana zderzaka i reflektora | 3,4 | 95,00 | 323,00
+Robocizna | Wymiana botnika i wahacza | 4,1 | 95,00 | 389,50
+Lakierowanie | Lakierowanie zderzaka i botnika | 5,2 | 100,00 | 520,00
+Lakierowanie | Materiał lakierniczy | 1 | 610,00 | 610,00
+Potrącenia | Amortyzacja części 30% | -1 | 593,00 | -593,00
+Potrącenia | Rabat na materiał lakierniczy 20% | -1 | 122,00 | -122,00
+Razem koszt naprawy netto | | | | 5 437,50`,
+    ]);
+    expect(est).toMatchObject({ currency: 'PLN', labourRate: 95, paintRate: 100, statedTotal: 5437.5 });
+    expect(est.items.map((i) => [i.kind, i.hours, i.total])).toEqual([
+      ['part', null, 1240],
+      ['part', null, 2890],
+      ['part', null, 760],
+      ['part', null, 420],
+      ['labour', 3.4, 323],
+      ['labour', 4.1, 389.5],
+      ['paint', 5.2, 520],
+      ['material', null, 610],
+      ['deduction', null, 1593],
+      ['deduction', null, 122],
+    ]);
+    expect(est.items.some((i) => i.check)).toBe(false);
+    expect(netOfItems(est)).toBe(5437.5);
+  });
+
+  it('marks a doubtful amount when there is no total to settle it', () => {
+    const est = parseTranscription(['Potrącenia | Amortyzacja części 30% | -1 | 593,00 | -593,00']);
+    expect(est.items[0]).toMatchObject({ kind: 'deduction', total: 593, check: true });
+  });
+
   it('merges pages and keeps the last total', () => {
     const a = normalizeEstimate({ currency: 'PLN', labourRate: 95, statedTotal: 100, items: [{ desc: 'a', kind: 'part', total: 1 }] });
     const b = normalizeEstimate({ currency: 'PLN', statedTotal: 900, items: [{ desc: 'b', kind: 'labour', total: 2 }] });

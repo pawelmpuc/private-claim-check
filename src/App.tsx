@@ -94,7 +94,7 @@ export function App() {
       <main className="wrap">
         <PrivacyPanel device={device} onDeviceChange={refreshDevice} allowCloud={allowCloud} onAllowCloud={setAllowCloud} log={log} />
 
-        <StepAdd allowCloud={allowCloud} onEstimate={loadEstimate} onLog={addLog} hasEstimate={estimate != null} onReset={() => setEstimate(null)} />
+        <StepAdd allowCloud={allowCloud} fallbackCurrency={countryByCode(country).currency} onEstimate={loadEstimate} onLog={addLog} hasEstimate={estimate != null} onReset={() => setEstimate(null)} />
 
         {estimate && (
           <>

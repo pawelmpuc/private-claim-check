@@ -10,12 +10,14 @@ import { useT } from '../lib/useT';
 interface Props {
   allowCloud: boolean;
   hasEstimate: boolean;
+  /** Currency assumed when the on-device transcription does not name one. */
+  fallbackCurrency: string;
   onEstimate: (estimate: Estimate, raw?: string) => void;
   onLog: (entry: Omit<InferenceLogEntry, 'at'>) => void;
   onReset: () => void;
 }
 
-export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }: Props) {
+export function StepAdd({ allowCloud, hasEstimate, fallbackCurrency, onEstimate, onLog, onReset }: Props) {
   const { t } = useT();
   const fileInput = useRef<HTMLInputElement>(null);
   const [pages, setPages] = useState<PageImage[]>([]);
@@ -74,7 +76,7 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
       try {
         const texts = await device();
         raw.current.push(...texts);
-        const estimate = parseTranscription(texts);
+        const estimate = parseTranscription(texts, fallbackCurrency);
         onLog({ step: 'read', source: 'on_device', redactions: 0 });
         return estimate;
       } catch (err) {

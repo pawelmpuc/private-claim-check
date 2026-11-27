@@ -452,6 +452,11 @@ textarea {
   border-left-color: var(--optimistic);
 }
 
+.tr.check {
+  border-left-color: var(--realistic);
+  background: var(--warn-bg);
+}
+
 .tr :disabled {
   background: #f3f2ed;
   color: transparent;

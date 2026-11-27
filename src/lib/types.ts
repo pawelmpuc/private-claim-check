@@ -10,6 +10,8 @@ export interface EstimateItem {
   unitPrice: number | null;
   total: number | null;
   partQuality: PartQuality;
+  /** Set when the on-device reading of this line is doubtful and could not be settled by the total. */
+  check?: boolean;
 }
 
 export interface Estimate {

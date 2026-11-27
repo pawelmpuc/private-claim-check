@@ -50,6 +50,8 @@ The two paths read a page differently.
 - **Cloud.** The whole page goes to Gemini in one request, in JSON mode.
 - **Device.** Gemini Nano copies a table well and restructures it badly, and it scales every image down to a small fixed size. So the app trims the white margins, cuts the page into wide overlapping tiles, and asks the model only to transcribe each tile row by row. The transcription is streamed to the page as it is written. Plain TypeScript then sorts the rows into parts, labour, paint, materials and deductions (`parseTranscription` in `src/lib/extract.ts`) and drops rows that two tiles share. The unit tests for that parser use transcriptions Gemini Nano actually produced, misreadings included.
 
+The printed total doubles as a checksum. Gemini Nano sometimes copies a printed "-1 593,00" as two cells, "-1" and "593,00". The parser keeps both readings and takes the one that makes the lines add up to the total; a line it cannot settle is highlighted for the user.
+
 A row is treated as a deduction only on evidence in the row itself: a negative amount or a word such as "rabat" or "depreciation". A section heading alone is not enough, because a misread heading would otherwise add money to the claim.
 
 ## Run it

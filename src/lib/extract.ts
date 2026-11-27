@@ -122,7 +122,7 @@ export function mergeEstimates(pages: Estimate[]): Estimate {
  * parts, labour and deductions is done by parseTranscription below.
  */
 export const TRANSCRIBE_PROMPT =
-  'Transcribe the table in this image of a car repair cost estimate. Write one line per table row, with the cells separated by " | ", exactly as printed and in the original language. Write section headings on their own line. Include the total row. Copy every number exactly. Do not translate. Do not explain.';
+  'Transcribe the table in this image of a car repair cost estimate. Write one line per table row, with the cells separated by " | ", exactly as printed and in the original language. Write section headings on their own line. Include the total row. Copy every number exactly. Do not translate. Do not explain. Before the table, write one line with the currency of the document as an ISO code, like this: CURRENCY: USD';
 
 export const TRANSCRIBE_TEXT_PROMPT =
   'Below is the text of a car repair cost estimate. Rewrite its priced lines as a table: one line per row, with the cells separated by " | ", in the original language. Keep section headings on their own line. Include the total row. Copy every number exactly. Do not translate. Do not explain.';
@@ -159,6 +159,11 @@ interface Row {
   /** The amount of the row, used to recognise rows that two overlapping tiles both contain. */
   signature: string;
   rate: number | null;
+  /**
+   * Another amount this row may really have. A printed "-1 593,00" is sometimes
+   * copied as the two cells "-1" and "593,00"; the printed total decides which is right.
+   */
+  alt: number | null;
 }
 
 function parseRows(text: string, state: { section: ItemKind | null; total: number | null; currency: string | null }): Row[] {
@@ -171,11 +176,13 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.replace(/\*\*|`/g, '').replace(/^\s*[-*>]\s+/, '').trim();
     if (!line) continue;
-    let cells = line.split('|').map((c) => c.trim()).filter((c) => c !== '' && c !== '-');
+    let cells = line.split('|').map((c) => c.trim()).filter((c) => c !== '' && !/^:?-+:?$/.test(c));
     if (cells.length === 0) continue;
 
     const numericAt = cells.map((c) => NUMERIC_CELL.test(c));
     if (!numericAt.some(Boolean)) {
+      const cur = line.match(/^CURRENCY\s*:\s*([A-Za-z]{3})\b/i);
+      if (cur) state.currency = cur[1].toUpperCase();
       const heading = sectionOf(cells[0]);
       if (heading) state.section = heading;
       continue;
@@ -242,10 +249,18 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
       partQuality = c === 'o' || c === 'oe' || c === 'oem' ? 'oem' : 'alternative';
     }
 
+    let alt: number | null = null;
+    const lead = numbers.findIndex((c) => /^[-\u2212]\s*[1-9]$/.test(c));
+    if (lead >= 0 && lead + 1 < numbers.length && /^\d{3}([.,]\d{1,2})?$/.test(numbers[lead + 1])) {
+      alt = Math.abs(values[lead]) * 1000 + values[lead + 1];
+      if (kind !== 'deduction') kind = 'deduction';
+    }
+
     rows.push({
       item: { id: newId(), desc, kind, qty: null, hours, unitPrice: null, total: amount, partQuality },
       signature: String(amount),
       rate,
+      alt,
     });
   }
   return rows;
@@ -280,6 +295,7 @@ export function parseTranscription(tiles: string[], fallbackCurrency = 'EUR'): E
     }
     rows.push(...next.slice(overlap));
   }
+  settleByTotal(rows, state.total);
   const rateOf = (kind: ItemKind) => commonest(rows.filter((r) => r.item.kind === kind && r.rate != null).map((r) => r.rate as number));
   return {
     currency: state.currency ?? fallbackCurrency,
@@ -288,4 +304,29 @@ export function parseTranscription(tiles: string[], fallbackCurrency = 'EUR'): E
     statedTotal: state.total,
     items: rows.map((r) => r.item),
   };
+}
+
+/**
+ * Uses the printed total as a checksum. Where a row has a second possible amount,
+ * the combination that makes the lines add up to the total is taken. Rows that stay
+ * undecided are marked for the user.
+ */
+function settleByTotal(rows: Row[], total: number | null): void {
+  const doubtful = rows.filter((r) => r.alt != null).slice(0, 8);
+  if (doubtful.length === 0) return;
+  const net = () => rows.reduce((s, r) => s + (r.item.kind === 'deduction' ? -1 : 1) * (r.item.total ?? 0), 0);
+  if (total != null) {
+    if (Math.abs(net() - total) <= 0.5) return;
+    for (let mask = 1; mask < 1 << doubtful.length; mask += 1) {
+      const original = doubtful.map((r) => r.item.total);
+      doubtful.forEach((r, i) => {
+        if (mask & (1 << i)) r.item.total = r.alt;
+      });
+      if (Math.abs(net() - total) <= 0.5) return;
+      doubtful.forEach((r, i) => {
+        r.item.total = original[i];
+      });
+    }
+  }
+  for (const r of doubtful) r.item.check = true;
 }

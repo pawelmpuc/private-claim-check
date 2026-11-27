@@ -78,6 +78,7 @@ export function StepReview({ estimate, onChange, onCurrency, country, onCountry,
         <NumberField label={t('statedTotal')} value={estimate.statedTotal} onChange={(v) => onChange({ ...estimate, statedTotal: v })} />
       </div>
 
+      {estimate.items.some((i) => i.check) && <p className="notice">{t('checkLine')}</p>}
       <div className="table" role="table" aria-label={t('step2')}>
         <div className="tr th" role="row">
           <span role="columnheader">{t('colDesc')}</span>
@@ -88,7 +89,7 @@ export function StepReview({ estimate, onChange, onCurrency, country, onCountry,
           <span />
         </div>
         {estimate.items.map((item) => (
-          <div className={`tr kind-${item.kind}`} role="row" key={item.id}>
+          <div className={`tr kind-${item.kind}${item.check ? ' check' : ''}`} role="row" key={item.id} title={item.check ? t('checkLine') : undefined}>
             <input aria-label={t('colDesc')} value={item.desc} onChange={(e) => patchItem(item.id, { desc: e.target.value })} />
             <select aria-label={t('colKind')} value={item.kind} onChange={(e) => patchItem(item.id, { kind: e.target.value as ItemKind })}>
               {KINDS.map((k) => (
@@ -126,7 +127,7 @@ export function StepReview({ estimate, onChange, onCurrency, country, onCountry,
               min="0"
               step="any"
               value={item.total ?? ''}
-              onChange={(e) => patchItem(item.id, { total: toNum(e.target.value) })}
+              onChange={(e) => patchItem(item.id, { total: toNum(e.target.value), check: false })}
             />
             <button type="button" className="icon" aria-label={t('remove')} title={t('remove')} onClick={() => onChange({ ...estimate, items: estimate.items.filter((i) => i.id !== item.id) })}>
               ×

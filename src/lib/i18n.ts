@@ -52,6 +52,7 @@ const en = {
 
   reviewHint: 'AI can misread a document. Compare these lines with your estimate and correct anything that is wrong before you rely on the result.',
   rawRead: 'Show what the on-device model wrote',
+  checkLine: 'The amount in the highlighted line could not be read with certainty. Compare it with your estimate.',
   colDesc: 'Line',
   colKind: 'Type',
   colHours: 'Hours',
@@ -190,6 +191,7 @@ const pl: Record<Key, string> = {
 
   reviewHint: 'AI może źle odczytać dokument. Porównaj te pozycje ze swoim kosztorysem i popraw błędy, zanim oprzesz się na wyniku.',
   rawRead: 'Pokaż, co zapisał model na urządzeniu',
+  checkLine: 'Kwoty w podświetlonej pozycji nie udało się odczytać z pewnością. Porównaj ją ze swoim kosztorysem.',
   colDesc: 'Pozycja',
   colKind: 'Rodzaj',
   colHours: 'Godziny',
