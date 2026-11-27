@@ -15,7 +15,8 @@ A repair estimate carries a name, an address, a number plate, a VIN and a claim 
 3. **Finds what is missing.** A rule engine written in plain TypeScript compares the estimate with hourly rates the user enters and lists the shortfalls: labour rate, paint rate, depreciation and discounts, VAT. It also raises questions that have no amount: non-original parts, missing calibration, missing wheel alignment, totals that do not add up.
 4. **Adapts to the country.** The country of the claim sets the currency and the default VAT rate; both stay editable.
 5. **Shows three totals.** Cautious, realistic and optimistic, one for each local rate the user entered.
-6. **Writes the letter.** The letter is assembled from the audit result. The model may then improve the wording, and the app checks its output.
+6. **Compares with a workshop quote.** Optional. A quote for the same repair is read the same way and set against the estimate, category by category: parts, labour hours and rates, paint, materials, deductions, and the work only the quote has. The three totals then become one figure, the difference between the two documents (`src/lib/compare.ts`).
+7. **Writes the letter.** The letter is assembled from the audit result. The model may then improve the wording, and the app checks its output.
 
 ## How AI is used, and where it is not
 
@@ -83,13 +84,14 @@ In other browsers the app works through the cloud path, once the user allows it.
 npm test
 ```
 
-The tests cover the audit arithmetic, number parsing, the transcription parser, the pasted-text parser, the letter guard and redaction.
+The tests cover the audit arithmetic, number parsing, the transcription parser, the pasted-text parser, the quote comparison, the letter guard and redaction.
 
-`docs/samples` holds two fictional estimates to try the app with, one in English (GBP) and one in Polish (PLN).
+`docs/samples` holds fictional documents to try the app with: an estimate in English (GBP) with a matching workshop quote, and an estimate in Polish (PLN).
 
 ## Limits
 
 - The hourly rates shipped with the app are examples, not market data. The user is asked to replace them.
+- Lines of the quote are matched to lines of the estimate by the words of their descriptions. The amounts are compared by category and do not depend on that matching; the list of work "only in the quote" does, and the interface asks the user to check it.
 - The missing-operation checks are keyword heuristics. They raise questions; they do not put a price on anything.
 - Redaction is pattern-based. It does not recognise names or street addresses.
 - On-device reading is slow. On a laptop with integrated graphics (Intel Iris Xe) a one-page sample takes about 100 seconds, and rewriting the letter about two and a half minutes. Up to six pages are read.

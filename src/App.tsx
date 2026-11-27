@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PrivacyPanel } from './components/PrivacyPanel';
 import { StepAdd } from './components/StepAdd';
+import { StepCompare } from './components/StepCompare';
 import { StepFindings } from './components/StepFindings';
 import { StepLetter } from './components/StepLetter';
 import { StepReview } from './components/StepReview';
 import { deviceStatus, type DeviceStatus } from './lib/ai';
 import { audit, defaultSettings } from './lib/audit';
+import { compareQuote } from './lib/compare';
 import { countryByCode, countryForCurrency } from './lib/countries';
 import { detectLang, translate } from './lib/i18n';
 import type { AuditSettings, Estimate, InferenceLogEntry, Lang, Tier } from './lib/types';
@@ -22,6 +24,8 @@ export function App() {
   const [deselected, setDeselected] = useState<Set<string>>(new Set());
   const [tier, setTier] = useState<Tier>('realistic');
   const [rawRead, setRawRead] = useState<string | null>(null);
+  const [quote, setQuote] = useState<Estimate | null>(null);
+  const [quoteRaw, setQuoteRaw] = useState<string | null>(null);
 
   const refreshDevice = useCallback(() => {
     void deviceStatus().then(setDevice);
@@ -60,7 +64,8 @@ export function App() {
     setSettings((prev) => ({ ...defaultSettings(next.currency, next.vat), totalIsNet: prev.totalIsNet, claimantDeductsVat: prev.claimantDeductsVat }));
   }, []);
 
-  const findings = useMemo(() => (estimate ? audit(estimate, settings) : []), [estimate, settings]);
+  const comparison = useMemo(() => (estimate && quote ? compareQuote(estimate, quote) : null), [estimate, quote]);
+  const findings = useMemo(() => (estimate ? audit(estimate, settings, comparison) : []), [estimate, settings, comparison]);
   const selected = useMemo(() => new Set(findings.map((f) => f.id).filter((id) => !deselected.has(id))), [findings, deselected]);
 
   const toggle = (id: string) =>
@@ -94,13 +99,26 @@ export function App() {
       <main className="wrap">
         <PrivacyPanel device={device} onDeviceChange={refreshDevice} allowCloud={allowCloud} onAllowCloud={setAllowCloud} log={log} />
 
-        <StepAdd allowCloud={allowCloud} fallbackCurrency={countryByCode(country).currency} onEstimate={loadEstimate} onLog={addLog} hasEstimate={estimate != null} onReset={() => setEstimate(null)} />
+        <StepAdd allowCloud={allowCloud} fallbackCurrency={countryByCode(country).currency} onEstimate={loadEstimate} onLog={addLog} hasEstimate={estimate != null} onReset={() => { setEstimate(null); setQuote(null); }} />
 
         {estimate && (
           <>
             <StepReview estimate={estimate} onChange={setEstimate} onCurrency={changeCurrency} country={country} onCountry={changeCountry} settings={settings} onSettings={setSettings} rawRead={rawRead} />
+            <StepAdd
+              variant="quote"
+              allowCloud={allowCloud}
+              fallbackCurrency={estimate.currency}
+              onEstimate={(next, raw) => {
+                setQuote(next);
+                setQuoteRaw(raw ?? null);
+              }}
+              onLog={addLog}
+              hasEstimate={quote != null}
+              onReset={() => setQuote(null)}
+            />
+            {quote && comparison && <StepCompare estimate={estimate} quote={quote} onQuote={setQuote} comparison={comparison} rawRead={quoteRaw} />}
             <StepFindings estimate={estimate} findings={findings} selected={selected} onToggle={toggle} />
-            <StepLetter estimate={estimate} findings={findings} selected={selected} tier={tier} onTier={setTier} allowCloud={allowCloud} onLog={addLog} />
+            <StepLetter estimate={estimate} findings={findings} selected={selected} comparison={comparison && comparison.gap > 0 ? comparison : null} tier={tier} onTier={setTier} allowCloud={allowCloud} onLog={addLog} />
           </>
         )}
 

@@ -1,4 +1,5 @@
 import { vatOnUplift } from './audit';
+import type { Comparison, GapRow } from './compare';
 import type { Estimate, Finding, Lang, Tier } from './types';
 
 export interface LetterDetails {
@@ -24,6 +25,8 @@ type Lines = Record<Finding['id'], (f: Finding, amount: string, tierRate: string
 
 const POINTS: Record<Lang, Lines> = {
   en: {
+    quote: (f, a, _r, m) =>
+      `Workshop quote. I obtained a quote for the same repair from a repair workshop and enclose a copy. It comes to ${m(f.params.garage)} net, while the estimate comes to ${m(f.params.insurer)}. Difference: ${a}.`,
     labourRate: (f, a, r, m) =>
       `Labour rate. The estimate prices ${num(f.params.hours, 'en')} hours of body and mechanical work at ${m(f.params.rate)} per hour. Workshops in my area charge ${r} per hour for this work. Difference: ${a}.`,
     paintRate: (f, a, r, m) =>
@@ -42,6 +45,8 @@ const POINTS: Record<Lang, Lines> = {
       `The lines of the estimate add up to ${m(f.params.lines)}, while the printed total is ${m(f.params.stated)}. Please explain the difference.`,
   },
   pl: {
+    quote: (f, a, _r, m) =>
+      `Wycena warsztatu. Uzyskałem(-am) wycenę tej samej naprawy w warsztacie i załączam jej kopię. Wycena opiewa na ${m(f.params.garage)} netto, a kosztorys na ${m(f.params.insurer)}. Różnica: ${a}.`,
     labourRate: (f, a, r, m) =>
       `Stawka za roboczogodzinę. Kosztorys wycenia ${num(f.params.hours, 'pl')} godz. prac blacharsko-mechanicznych po ${m(f.params.rate)} za godzinę. Warsztaty w mojej okolicy stosują stawkę ${r} za godzinę. Różnica: ${a}.`,
     paintRate: (f, a, r, m) =>
@@ -80,8 +85,50 @@ const FRAME = {
   },
 } as const;
 
+const QUOTE_TEXT = {
+  en: {
+    kinds: { part: 'Parts', labour: 'Labour', paint: 'Paint work', material: 'Materials', other: 'Other work', deduction: 'Deductions' },
+    head: 'The difference is made up as follows:',
+    timed: (amount: string, hours: string, rate: string) => `${amount} (${hours} hours at ${rate} per hour)`,
+    row: (label: string, insurer: string, garage: string) => `${label}: the estimate allows ${insurer}; the quote allows ${garage}.`,
+    deduction: (insurer: string, garage: string | null) => `Deductions: the estimate deducts ${insurer}; the quote ${garage ? `deducts ${garage}` : 'has no deductions'}.`,
+    extra: (list: string) => `Work in the quote that the estimate leaves out: ${list}.`,
+  },
+  pl: {
+    kinds: { part: 'Części', labour: 'Robocizna', paint: 'Lakierowanie', material: 'Materiały', other: 'Pozostałe prace', deduction: 'Potrącenia' },
+    head: 'Na różnicę składają się:',
+    timed: (amount: string, hours: string, rate: string) => `${amount} (${hours} godz. po ${rate})`,
+    row: (label: string, insurer: string, garage: string) => `${label}: w kosztorysie ${insurer}; w wycenie warsztatu ${garage}.`,
+    deduction: (insurer: string, garage: string | null) => `Potrącenia: kosztorys potrąca ${insurer}; wycena warsztatu ${garage ? `potrąca ${garage}` : 'nie zawiera potrąceń'}.`,
+    extra: (list: string) => `Prace ujęte w wycenie warsztatu, których nie ma w kosztorysie: ${list}.`,
+  },
+} as const;
+
+/** The lines under the workshop-quote point: one per category that differs, then the work only the quote has. */
+export function quoteBreakdown(comparison: Comparison, lang: Lang, fmt: (n: number) => string): string {
+  const text = QUOTE_TEXT[lang];
+  const side = (row: GapRow, who: 'insurer' | 'garage') => {
+    const hours = who === 'insurer' ? row.insurerHours : row.garageHours;
+    const rate = who === 'insurer' ? row.insurerRate : row.garageRate;
+    const amount = fmt(row[who]);
+    return hours != null && rate != null ? text.timed(amount, num(hours, lang), fmt(rate)) : amount;
+  };
+  const lines = comparison.rows
+    .filter((row) => row.gap !== 0)
+    .map((row) =>
+      row.kind === 'deduction'
+        ? text.deduction(fmt(Math.abs(row.insurer)), row.garage === 0 ? null : fmt(Math.abs(row.garage)))
+        : text.row(text.kinds[row.kind], side(row, 'insurer'), side(row, 'garage')),
+    );
+  const out = [text.head, ...lines.map((line) => `   - ${line}`)];
+  if (comparison.extra.length > 0) {
+    out.push(`   ${text.extra(comparison.extra.map((i) => `${i.desc} (${fmt(Math.abs(i.total ?? 0))})`).join('; '))}`);
+  }
+  return out.join('\n');
+}
+
 /** Builds the letter from the audit result alone. Every amount in it comes from the audit, not from a model. */
-export function draftLetter(estimate: Estimate, findings: Finding[], selected: Set<string>, tier: Tier, lang: Lang): string {
+export function draftLetter(estimate: Estimate, findings: Finding[], selected: Set<string>, tier: Tier, lang: Lang, comparison: Comparison | null = null): string {
   const chosen = findings.filter((f) => selected.has(f.id));
   const withAmount = chosen.filter((f) => f.amounts && f.amounts[tier] > 0);
   const questions = chosen.filter((f) => !f.amounts);
@@ -90,7 +137,10 @@ export function draftLetter(estimate: Estimate, findings: Finding[], selected: S
   const tierRate = (f: Finding) => (f.params.mid == null ? '' : fmt(Number(tier === 'cautious' ? f.params.low : tier === 'realistic' ? f.params.mid : f.params.high)));
 
   const m: Fmt = (n) => fmt(Number(n));
-  const points = withAmount.map((f) => POINTS[lang][f.id](f, fmt(f.amounts![tier]), tierRate(f), m));
+  const points = withAmount.map((f) => {
+    const point = POINTS[lang][f.id](f, fmt(f.amounts![tier]), tierRate(f), m);
+    return f.id === 'quote' && comparison ? `${point} ${quoteBreakdown(comparison, lang, fmt)}` : point;
+  });
   const upliftVat = vatOnUplift(findings, selected)[tier];
   const vat = findings.find((f) => f.id === 'vat');
   if (upliftVat > 0 && vat) points.push(frame.vatUplift(fmt(upliftVat), num(vat.params.rate, lang)));

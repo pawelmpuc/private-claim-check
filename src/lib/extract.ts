@@ -141,6 +141,7 @@ const SECTIONS: Array<[ItemKind, RegExp]> = [
   ['labour', /robo[ct]|robcz|labou?r|arbeit|blachar|mechani/],
   ['material', /material/],
   ['part', /czesc|zamienn|^parts?$|spareparts|ersatzteil/],
+  ['other', /^additional|^otherwork|^sundr|^dodatkow|^pozostal|^inneprace|^zusatz/],
 ];
 const DEDUCTION_WORDS = /amortyz|urealn|rabat|potrac|upust|discount|deprecia|betterment|rebate|abzug|deduct/;
 const LABOUR_WORDS = /wymian|napraw|demont|montaz|replace|repair|remove|refit|ausbau|einbau|ersetzen/;
@@ -199,6 +200,8 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
       if (cur) state.currency = cur[1].toUpperCase();
       const heading = sectionOf(cells[0]);
       if (heading) state.section = heading;
+      // A short heading in capitals that names no known section still ends the previous one.
+      else if (cells.length === 1 && cells[0].split(/\s+/).length <= 3 && cells[0] === cells[0].toUpperCase() && /\p{Lu}{3}/u.test(cells[0])) state.section = null;
       continue;
     }
     // A leading row number such as "3 | Błotnik | ...".

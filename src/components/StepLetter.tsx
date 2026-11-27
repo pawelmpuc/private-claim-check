@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, DeviceTimeoutError, firebaseConfigured, NotConfiguredError, run } from '../lib/ai';
 import { TIERS, tierTotals } from '../lib/audit';
+import type { Comparison } from '../lib/compare';
 import type { Key } from '../lib/i18n';
 import { draftLetter, fillDetails, money, POLISH_PROMPT, verifyRewrite, type LetterDetails } from '../lib/letter';
 import { redact } from '../lib/redact';
@@ -11,13 +12,15 @@ interface Props {
   estimate: Estimate;
   findings: Finding[];
   selected: Set<string>;
+  /** Set when a workshop quote is the basis of the claim. */
+  comparison: Comparison | null;
   tier: Tier;
   onTier: (tier: Tier) => void;
   allowCloud: boolean;
   onLog: (entry: Omit<InferenceLogEntry, 'at'>) => void;
 }
 
-export function StepLetter({ estimate, findings, selected, tier, onTier, allowCloud, onLog }: Props) {
+export function StepLetter({ estimate, findings, selected, comparison, tier, onTier, allowCloud, onLog }: Props) {
   const { t, lang } = useT();
   const [details, setDetails] = useState<LetterDetails>({ name: '', insurer: '', claimNumber: '' });
   const [rewrite, setRewrite] = useState<{ draft: string; text: string } | null>(null);
@@ -30,7 +33,7 @@ export function StepLetter({ estimate, findings, selected, tier, onTier, allowCl
   const [letterLang, setLetterLang] = useState<Lang>(lang);
   useEffect(() => setLetterLang(lang), [lang]);
 
-  const draft = useMemo(() => draftLetter(estimate, findings, selected, tier, letterLang), [estimate, findings, selected, tier, letterLang]);
+  const draft = useMemo(() => draftLetter(estimate, findings, selected, tier, letterLang, comparison), [estimate, findings, selected, tier, letterLang, comparison]);
   const totals = tierTotals(findings, selected);
   // A rewrite is only valid for the exact draft it was made from.
   const body = rewrite && rewrite.draft === draft ? rewrite.text : draft;
@@ -103,10 +106,10 @@ export function StepLetter({ estimate, findings, selected, tier, onTier, allowCl
         <>
           <fieldset className="tier-pick">
             <legend>{t('letterTier')}</legend>
-            {TIERS.map((option) => (
+            {(totals.cautious === totals.optimistic ? TIERS.filter((option) => option === tier) : TIERS).map((option) => (
               <label key={option} className={`tier tier-${option} ${option === tier ? 'on' : ''}`}>
                 <input type="radio" name="tier" checked={option === tier} onChange={() => onTier(option)} />
-                <span className="tier-name">{t(`tier_${option}` as Key)}</span>
+                <span className="tier-name">{t(totals.cautious === totals.optimistic ? 'totalSingle' : (`tier_${option}` as Key))}</span>
                 <strong>{money(totals[option], estimate.currency, lang)}</strong>
               </label>
             ))}

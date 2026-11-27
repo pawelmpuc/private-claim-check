@@ -31,3 +31,26 @@ export function sampleEstimate(): Estimate {
     })),
   };
 }
+
+/** A made-up workshop quote for the same repair as the sample estimate. */
+export function sampleQuote(): Estimate {
+  const rows: Array<[string, Estimate['items'][number]['kind'], number | null, number, Estimate['items'][number]['partQuality']]> = [
+    ['Zderzak przedni / Front bumper cover', 'part', null, 1890, 'oem'],
+    ['Reflektor lewy LED / Left LED headlamp', 'part', null, 2890, 'oem'],
+    ['Błotnik przedni lewy / Left front wing', 'part', null, 1120, 'oem'],
+    ['Wahacz przedni lewy / Left front control arm', 'part', null, 610, 'oem'],
+    ['Wymiana zderzaka i reflektora / Replace bumper and headlamp', 'labour', 4, 720, 'unknown'],
+    ['Wymiana błotnika i wahacza / Replace wing and control arm', 'labour', 5, 900, 'unknown'],
+    ['Lakierowanie zderzaka i błotnika / Paint bumper and wing', 'paint', 6, 1140, 'unknown'],
+    ['Materiał lakierniczy / Paint materials', 'material', null, 780, 'unknown'],
+    ['Kalibracja reflektora / Headlamp calibration', 'other', null, 250, 'unknown'],
+    ['Ustawienie geometrii kół / Wheel alignment', 'other', null, 220, 'unknown'],
+  ];
+  return {
+    currency: 'PLN',
+    labourRate: 180,
+    paintRate: 190,
+    statedTotal: 10520,
+    items: rows.map(([desc, kind, hours, total, partQuality], n) => ({ id: `quote${n}`, desc, kind, qty: null, hours, unitPrice: null, total, partQuality })),
+  };
+}

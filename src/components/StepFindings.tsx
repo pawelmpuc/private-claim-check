@@ -18,10 +18,13 @@ export function StepFindings({ estimate, findings, selected, onToggle }: Props) 
   const questions = findings.filter((f) => !f.amounts);
   const totals = tierTotals(findings, selected);
   const hasVatUplift = vatOnUplift(findings, selected).optimistic > 0;
+  // With a workshop quote every amount comes from a document, and the three tiers are one figure.
+  const single = claimable.every((f) => f.amounts!.cautious === f.amounts!.optimistic);
+  const tiers = single ? TIERS.slice(1, 2) : TIERS;
 
   const describe = (f: Finding) => {
     const params: Record<string, string | number> = { ...f.params };
-    for (const key of ['rate', 'lines', 'stated']) {
+    for (const key of ['rate', 'lines', 'stated', 'garage', 'insurer']) {
       if (f.id !== 'vat' && typeof params[key] === 'number') params[key] = fmt(params[key] as number);
     }
     return t(`d_${f.id}` as Key, params);
@@ -38,12 +41,12 @@ export function StepFindings({ estimate, findings, selected, onToggle }: Props) 
           {claimable.length > 0 && (
             <>
               <h3>{t('totalsTitle')}</h3>
-              <div className="tiers">
-                {TIERS.map((tier) => (
+              <div className={single ? 'tiers tiers-single' : 'tiers'}>
+                {tiers.map((tier) => (
                   <div key={tier} className={`tier tier-${tier}`}>
-                    <span className="tier-name">{t(`tier_${tier}` as Key)}</span>
+                    <span className="tier-name">{t(single ? 'totalSingle' : (`tier_${tier}` as Key))}</span>
                     <strong>{fmt(totals[tier])}</strong>
-                    <small>{t(`tierHelp_${tier}` as Key)}</small>
+                    <small>{t(single ? 'totalSingleHelp' : (`tierHelp_${tier}` as Key))}</small>
                   </div>
                 ))}
               </div>
@@ -61,8 +64,8 @@ export function StepFindings({ estimate, findings, selected, onToggle }: Props) 
                       </span>
                     </label>
                     <span className="amounts">
-                      {TIERS.map((tier) => (
-                        <span key={tier} className={`amt tier-${tier}`} title={t(`tier_${tier}` as Key)}>
+                      {tiers.map((tier) => (
+                        <span key={tier} className={`amt tier-${tier}`} title={single ? undefined : t(`tier_${tier}` as Key)}>
                           {fmt(f.amounts![tier])}
                         </span>
                       ))}

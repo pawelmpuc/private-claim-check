@@ -1,4 +1,5 @@
 import type { AuditSettings, Estimate, EstimateItem, Finding, RefRates, Tier, Tiered } from './types';
+import type { Comparison } from './compare';
 
 /**
  * Example hourly rates used only as a starting point. They are not market data:
@@ -77,19 +78,33 @@ export function netOfItems(estimate: Estimate): number {
   );
 }
 
-export function audit(estimate: Estimate, settings: AuditSettings): Finding[] {
+/**
+ * With a workshop quote that is higher than the estimate, the difference between the two
+ * replaces the rate and deduction rules: the quote already prices them.
+ */
+export function audit(estimate: Estimate, settings: AuditSettings, comparison: Comparison | null = null): Finding[] {
   const findings: Finding[] = [];
   const { items } = estimate;
+  const byQuote = comparison != null && comparison.gap > 0;
+  if (comparison && byQuote) {
+    const gap = comparison.gap;
+    findings.push({
+      id: 'quote',
+      amounts: { cautious: gap, realistic: gap, optimistic: gap },
+      params: { insurer: comparison.insurerNet, garage: comparison.garageNet },
+      itemIds: [],
+    });
+  }
 
-  const labour = rateFinding('labourRate', estimate.labourRate, items.filter((i) => i.kind === 'labour'), settings.refRates);
+  const labour = byQuote ? null : rateFinding('labourRate', estimate.labourRate, items.filter((i) => i.kind === 'labour'), settings.refRates);
   if (labour) findings.push(labour);
 
-  const paint = rateFinding('paintRate', estimate.paintRate, items.filter((i) => i.kind === 'paint'), settings.refRates);
+  const paint = byQuote ? null : rateFinding('paintRate', estimate.paintRate, items.filter((i) => i.kind === 'paint'), settings.refRates);
   if (paint) findings.push(paint);
 
   const deductions = items.filter((i) => i.kind === 'deduction');
   const deducted = round2(deductions.reduce((s, i) => s + Math.abs(itemTotal(i)), 0));
-  if (deducted > 0) {
+  if (deducted > 0 && !byQuote) {
     findings.push({
       id: 'deductions',
       amounts: { cautious: deducted, realistic: deducted, optimistic: deducted },

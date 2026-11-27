@@ -29,6 +29,7 @@ export type Tier = 'cautious' | 'realistic' | 'optimistic';
 export type Tiered = Record<Tier, number>;
 
 export type RuleId =
+  | 'quote'
   | 'labourRate'
   | 'paintRate'
   | 'deductions'

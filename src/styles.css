@@ -700,3 +700,100 @@ textarea {
     font: 12pt/1.5 Georgia, 'Times New Roman', serif;
   }
 }
+
+/* Workshop quote */
+.card-optional {
+  border-style: dashed;
+}
+
+.cmp {
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.cmp-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr 0.9fr;
+  gap: 8px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+  align-items: baseline;
+}
+
+.cmp-row:first-child {
+  border-top: 0;
+}
+
+.cmp-row > span {
+  font-variant-numeric: tabular-nums;
+}
+
+.cmp-row > span:not(:first-child) {
+  text-align: right;
+}
+
+.cmp-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.cmp-head {
+  background: #f3f2ed;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.cmp-total {
+  font-weight: 700;
+  background: #faf9f5;
+}
+
+.gap-up {
+  color: var(--realistic);
+  font-weight: 600;
+}
+
+.extra {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+
+.extra li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.quote-lines {
+  margin-top: 14px;
+}
+
+.quote-lines > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tiers-single {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 640px) {
+  .cmp-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cmp-row > span:first-child {
+    grid-column: 1 / -1;
+    font-weight: 600;
+  }
+
+  .cmp-head {
+    display: none;
+  }
+}

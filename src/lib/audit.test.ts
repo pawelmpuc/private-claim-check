@@ -4,7 +4,8 @@ import { mergeEstimates, normalizeEstimate, parseModelJson, parseNumber, parsePa
 import { draftLetter, verifyRewrite } from './letter';
 import { redact } from './redact';
 import { countryForCurrency } from './countries';
-import { sampleEstimate } from './sample';
+import { compareQuote } from './compare';
+import { sampleEstimate, sampleQuote } from './sample';
 
 const all = (ids: string[]) => new Set(ids);
 
@@ -383,4 +384,66 @@ describe('countries', () => {
     expect(countryForCurrency('EUR', 'PL')).toBe('IE');
     expect(countryForCurrency('CHF', 'PL')).toBe('OTHER');
   });
+
+describe('workshop quote', () => {
+  const insurer = sampleEstimate();
+  const garage = sampleQuote();
+  const cmp = compareQuote(insurer, garage);
+
+  it('compares by category and the rows add up to the totals', () => {
+    expect(cmp).toMatchObject({ insurerNet: 5437.5, garageNet: 10520, gap: 5082.5 });
+    expect(cmp.rows.map((r) => [r.kind, r.insurer, r.garage, r.gap])).toEqual([
+      ['part', 5310, 6510, 1200],
+      ['labour', 712.5, 1620, 907.5],
+      ['paint', 520, 1140, 620],
+      ['material', 610, 780, 170],
+      ['other', 0, 470, 470],
+      ['deduction', -1715, 0, 1715],
+    ]);
+    expect(cmp.rows.reduce((s, r) => s + r.gap, 0)).toBe(cmp.gap);
+    expect(cmp.rows[1]).toMatchObject({ insurerHours: 7.5, garageHours: 9, insurerRate: 95, garageRate: 180 });
+  });
+
+  it('lists the work only the quote has', () => {
+    expect(cmp.extra.map((i) => i.total)).toEqual([250, 220]);
+  });
+
+  it('replaces the rate and deduction rules with the quote difference', () => {
+    const settings = defaultSettings('PLN', 23);
+    const findings = audit(insurer, settings, cmp);
+    const ids = findings.map((f) => f.id);
+    expect(ids).toContain('quote');
+    expect(ids).not.toContain('labourRate');
+    expect(ids).not.toContain('paintRate');
+    expect(ids).not.toContain('deductions');
+    const totals = tierTotals(findings, new Set(ids));
+    // The claimant ends up with the gross quote less the net estimate already offered.
+    expect(totals.cautious).toBe(totals.optimistic);
+    // Each VAT figure in the letter is rounded on its own, so the sum may be a cent off.
+    expect(Math.abs(totals.realistic - (10520 * 1.23 - 5437.5))).toBeLessThan(0.02);
+  });
+
+  it('keeps the usual rules when the quote is not higher', () => {
+    const findings = audit(insurer, defaultSettings('PLN', 23), compareQuote(insurer, insurer));
+    expect(findings.map((f) => f.id)).toContain('labourRate');
+    expect(findings.map((f) => f.id)).not.toContain('quote');
+  });
+
+  it('writes the breakdown into the letter and the letter passes its own check', () => {
+    const findings = audit(insurer, defaultSettings('PLN', 23), cmp);
+    const letter = draftLetter(insurer, findings, new Set(findings.map((f) => f.id)), 'realistic', 'en', cmp);
+    expect(letter).toContain('It comes to PLN 10,520.00 net, while the estimate comes to PLN 5,437.50. Difference: PLN 5,082.50.');
+    expect(letter).toContain('Labour: the estimate allows PLN 712.50 (7.5 hours at PLN 95.00 per hour); the quote allows PLN 1,620.00 (9 hours at PLN 180.00 per hour).');
+    expect(letter).toContain('Deductions: the estimate deducts PLN 1,715.00; the quote has no deductions.');
+    expect(letter).toContain('Headlamp calibration (PLN 250.00)');
+    expect(verifyRewrite(letter, letter).ok).toBe(true);
+    const pl = draftLetter(insurer, findings, new Set(findings.map((f) => f.id)), 'realistic', 'pl', cmp);
+    expect(pl).toContain('Potrącenia: kosztorys potrąca 1715,00 zł; wycena warsztatu nie zawiera potrąceń.');
+  });
+
+  it('ends a section at a heading it does not know', () => {
+    const est = parseTranscription(['PAINT\nPaint bumper | 6.0 | 75.00 | 450.00\nEXTRA ITEMS\nWheel alignment | 1 | 65.00 | 65.00\nADDITIONAL WORK\nHeadlamp calibration | 1 | 90.00 | 90.00'], 'GBP');
+    expect(est.items.map((i) => i.kind)).toEqual(['paint', 'other', 'other']);
+  });
+});
 });

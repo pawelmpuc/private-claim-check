@@ -3,11 +3,13 @@ import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, deviceStatus, DeviceTimeo
 import { emptyItem, mergeEstimates, normalizeEstimate, parseModelJson, parsePastedText, parseTranscription, READ_PROMPT, TRANSCRIBE_PROMPT, TRANSCRIBE_TEXT_PROMPT } from '../lib/extract';
 import { filesToPages, MAX_PAGES, tilesOf, type PageImage } from '../lib/files';
 import { redact } from '../lib/redact';
-import { sampleEstimate } from '../lib/sample';
+import { sampleEstimate, sampleQuote } from '../lib/sample';
 import type { Estimate, InferenceLogEntry } from '../lib/types';
 import { useT } from '../lib/useT';
 
 interface Props {
+  /** The insurer's estimate, or a workshop quote to compare it with. */
+  variant?: 'estimate' | 'quote';
   allowCloud: boolean;
   hasEstimate: boolean;
   /** Currency assumed when the on-device transcription does not name one. */
@@ -17,8 +19,11 @@ interface Props {
   onReset: () => void;
 }
 
-export function StepAdd({ allowCloud, hasEstimate, fallbackCurrency, onEstimate, onLog, onReset }: Props) {
+export function StepAdd({ variant = 'estimate', allowCloud, hasEstimate, fallbackCurrency, onEstimate, onLog, onReset }: Props) {
   const { t } = useT();
+  const quote = variant === 'quote';
+  const headId = quote ? 'stepq' : 'step1';
+  const inputId = quote ? 'files-quote' : 'files';
   const fileInput = useRef<HTMLInputElement>(null);
   const [pages, setPages] = useState<PageImage[]>([]);
   const [text, setText] = useState('');
@@ -177,24 +182,24 @@ export function StepAdd({ allowCloud, hasEstimate, fallbackCurrency, onEstimate,
   };
 
   return (
-    <section className="card" aria-labelledby="step1">
+    <section className={quote ? 'card card-optional' : 'card'} aria-labelledby={headId}>
       <div className="card-head">
-        <h2 id="step1">{t('step1')}</h2>
+        <h2 id={headId}>{t(quote ? 'quoteTitle' : 'step1')}</h2>
         {hasEstimate && (
           <button type="button" className="btn btn-quiet" onClick={reset}>
-            {t('startOver')}
+            {t(quote ? 'quoteRemove' : 'startOver')}
           </button>
         )}
       </div>
 
-      <p className="help">{t('uploadHint', { n: MAX_PAGES })}</p>
-      <input ref={fileInput} id="files" className="sr-only" type="file" accept="image/*,application/pdf" multiple onChange={(e) => void pickFiles(e.target.files)} />
+      <p className="help">{t(quote ? 'quoteHint' : 'uploadHint', { n: MAX_PAGES })}</p>
+      <input ref={fileInput} id={inputId} className="sr-only" type="file" accept="image/*,application/pdf" multiple onChange={(e) => void pickFiles(e.target.files)} />
       <div className="row">
-        <label htmlFor="files" className="btn btn-primary">
+        <label htmlFor={inputId} className={quote ? 'btn' : 'btn btn-primary'}>
           {t('chooseFiles')}
         </label>
-        <button type="button" className="btn" onClick={() => onEstimate(sampleEstimate())}>
-          {t('loadSample')}
+        <button type="button" className="btn" onClick={() => onEstimate(quote ? sampleQuote() : sampleEstimate())}>
+          {t(quote ? 'loadSampleQuote' : 'loadSample')}
         </button>
         <button type="button" className="btn btn-quiet" onClick={manual}>
           {t('typeManually')}
@@ -210,13 +215,13 @@ export function StepAdd({ allowCloud, hasEstimate, fallbackCurrency, onEstimate,
             ))}
           </div>
           <button type="button" className="btn btn-primary" onClick={() => void readPages()} disabled={busy != null || !firebaseConfigured}>
-            {t('readPages')}
+            {t(quote ? 'readQuote' : 'readPages')}
           </button>
         </div>
       )}
 
       <details className="paste">
-        <summary>{t('orPaste')}</summary>
+        <summary>{t(quote ? 'orPasteQuote' : 'orPaste')}</summary>
         <textarea rows={6} value={text} placeholder={t('pastePlaceholder')} onChange={(e) => setText(e.target.value)} />
         <button type="button" className="btn" onClick={() => void readText()} disabled={busy != null || text.trim().length < 20 || !firebaseConfigured}>
           {t('readText')}
