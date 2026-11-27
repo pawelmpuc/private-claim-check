@@ -48,6 +48,8 @@ All inference goes through Firebase AI Logic (`src/lib/ai.ts`). The app does not
 3. If it is not, or the device run fails, and the user has allowed the cloud, run with `InferenceMode.ONLY_IN_CLOUD`. Text is redacted first (`src/lib/redact.ts`): emails, phone numbers, VINs, plates, IBANs and 11-digit ID numbers. Photos cannot be redacted, and the interface says so.
 4. If the cloud is not allowed, stop and say why.
 
+A cloud model has a daily allowance of requests. When the first model answers that its allowance is used up, the request goes once more to a backup model that has an allowance of its own. When both are used up, the app says so in plain words and points to the on-device path.
+
 A browser can report the on-device model as available and still fail to start it. The device attempt is therefore abandoned when no text arrives within 90 seconds, and the app then follows steps 3 and 4.
 
 The panel at the top of the page logs each request with the place it ran, taken from `response.inferenceSource`. A PDF read from its text layer is logged as "no AI used".
@@ -55,7 +57,7 @@ The panel at the top of the page logs each request with the place it ran, taken 
 ### Other Firebase products
 
 - **App Check** (reCAPTCHA Enterprise) protects the AI endpoint, so the key in the page cannot be used from elsewhere.
-- **Remote Config** carries two settings: the name of the cloud model and the 90-second wait above. Model names get retired; this lets the app move to a new one without a release. The values are checked before use, and the app runs on built-in defaults when Remote Config does not answer.
+- **Remote Config** carries three settings: the name of the cloud model, the name of a backup cloud model and the 90-second wait above. Model names get retired; this lets the app move to a new one without a release. The values are checked before use, and the app runs on built-in defaults when Remote Config does not answer.
 
 ### How a document is read
 
@@ -81,11 +83,12 @@ What has been checked on Android, and what has not:
 | Pixel 10 Pro, Android 16, a real phone in Firebase Test Lab | Install, start, the status of the on-device model, one request to the cloud model through the SDK with App Check enforced | The cloud request answered in 2 seconds, `inferenceSource` said cloud, the figure check passed. On-device model: unavailable |
 | Galaxy S26, Android 16, a real phone in Firebase Test Lab | Install, start, the status of the on-device model, asked again for 25 minutes | On-device model: unavailable |
 | Android 16 emulator in Firebase Test Lab | The same as on the Pixel | The cloud request answered in 2 seconds, the figure check passed |
+| Android 16 emulator in Firebase Test Lab | A scripted walk-through of the ordinary screens (`LabDemo`): allow the cloud, load the sample estimate, ask for the explanation, read the audit, reword the letter | Every step passed. In a second run the cloud model dropped the 14-day deadline from the letter, and the app discarded its version, as it should |
 | On-device inference on a phone | | **Not confirmed yet** |
 
 The on-device half could not be shown in Test Lab, and the logs say why. Its phones are wiped before every run and carry no Google account, so AICore, the service that provides Gemini Nano, is still the factory placeholder there (version `0.stub…`); the real one arrives through the Play Store. The Pixel in the lab also has an unlocked bootloader, which rules Gemini Nano out by itself. The on-device code follows the documented calls (`FirebaseAIOnDevice.checkStatus()`, `download()`, `InferenceMode.ONLY_ON_DEVICE`) and reports "unavailable" correctly on every phone above, but no phone with a working Gemini Nano has run it. On such a phone, the link **Check the on-device AI on this phone** in the privacy panel runs the self-test described below.
 
-The self-test (`SelfTest.tsx`) runs by itself. It asks the SDK whether the phone has the on-device model, downloads it if it can, explains the built-in sample estimate on the device, runs the figure check on the answer and, when asked to, repeats the request against the cloud model. Every step is written on the screen and to logcat under the tag `PCC`. The app opens the self-test by itself in Firebase Test Lab; `android/labtest` is a helper APK for an Instrumentation run there, which also records the state of the phone (tag `PCCLAB`).
+The self-test (`SelfTest.tsx`) runs by itself. It asks the SDK whether the phone has the on-device model, downloads it if it can, explains the built-in sample estimate on the device, runs the figure check on the answer and, when asked to, repeats the request against the cloud model. Every step is written on the screen and to logcat under the tag `PCC`. The app opens the self-test by itself in Firebase Test Lab; `android/labtest` is a helper APK for an Instrumentation run there, which also records the state of the phone (tag `PCCLAB`). Built with `-Pdemo`, the helper walks through the ordinary screens instead, tapping what it finds by its text, so the lab's video and screenshots show the app at work.
 
 To build it:
 
@@ -122,7 +125,7 @@ npm run dev
 
 For local development set `VITE_APPCHECK_DEBUG=true`, open the console, and register the printed debug token under App Check in the Firebase console.
 
-Remote Config is optional. To use it, add two parameters in the Firebase console: `cloud_model` (text) and `device_timeout_s` (number).
+Remote Config is optional. To use it, add parameters in the Firebase console: `cloud_model` (text), `cloud_model_backup` (text) and `device_timeout_s` (number).
 
 Without a `.env` file the app starts in demo mode: the sample estimate, the audit and the letter work, AI requests are disabled.
 
@@ -140,7 +143,7 @@ In other browsers the app works through the cloud path, once the user allows it.
 npm test
 ```
 
-The tests cover the audit arithmetic, number parsing, the text-layer layout, the totals-block reader, the transcription parser, the pasted-text parser, the quote comparison, the explanation and letter checks, the Remote Config value check and redaction.
+The tests cover the audit arithmetic, number parsing, the text-layer layout, the totals-block reader, the transcription parser, the pasted-text parser, the quote comparison, the explanation and letter checks, the Remote Config value check, the switch to the backup cloud model and redaction.
 
 `docs/samples` holds fictional documents to try the app with:
 
