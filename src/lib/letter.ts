@@ -1,0 +1,159 @@
+import { vatOnUplift } from './audit';
+import type { Estimate, Finding, Lang, Tier } from './types';
+
+export interface LetterDetails {
+  name: string;
+  insurer: string;
+  claimNumber: string;
+}
+
+const LOCALE: Record<Lang, string> = { en: 'en-GB', pl: 'pl-PL' };
+
+export function money(amount: number, currency: string, lang: Lang): string {
+  try {
+    return new Intl.NumberFormat(LOCALE[lang], { style: 'currency', currency }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
+const num = (n: string | number, lang: Lang) => new Intl.NumberFormat(LOCALE[lang], { maximumFractionDigits: 2 }).format(Number(n));
+
+type Fmt = (n: string | number) => string;
+type Lines = Record<Finding['id'], (f: Finding, amount: string, tierRate: string, m: Fmt) => string>;
+
+const POINTS: Record<Lang, Lines> = {
+  en: {
+    labourRate: (f, a, r, m) =>
+      `Labour rate. The estimate prices ${num(f.params.hours, 'en')} hours of body and mechanical work at ${m(f.params.rate)} per hour. Workshops in my area charge ${r} per hour for this work. Difference: ${a}.`,
+    paintRate: (f, a, r, m) =>
+      `Paint labour rate. The estimate prices ${num(f.params.hours, 'en')} hours of paint work at ${m(f.params.rate)} per hour, against a local rate of ${r} per hour. Difference: ${a}.`,
+    deductions: (f, a) =>
+      `Deductions. The estimate lowers the payout through ${f.params.count} deduction line(s) such as depreciation or discounts. I have not been shown that these discounts are available to me or that new parts would raise the value of the vehicle. Amount deducted: ${a}.`,
+    vat: (f, a) =>
+      `VAT. The estimate is calculated without VAT. I cannot reclaim VAT, so the repair will cost me the gross amount. VAT at ${num(f.params.rate, 'en')}% on the estimate total: ${a}.`,
+    alternativeParts: (f) =>
+      `The estimate prices ${f.params.count} part(s) as non-original or used parts. Please state the price of the original manufacturer parts and explain why they were not used.`,
+    missingCalibration: () =>
+      `The estimate replaces parts that usually carry or sit next to sensors, cameras or lamps, yet it includes no calibration. Please confirm whether calibration is needed and add it to the estimate.`,
+    missingAlignment: () =>
+      `The estimate replaces suspension or steering parts but includes no wheel alignment. Please add it or explain why it is not needed.`,
+    arithmetic: (f, _a, _r, m) =>
+      `The lines of the estimate add up to ${m(f.params.lines)}, while the printed total is ${m(f.params.stated)}. Please explain the difference.`,
+  },
+  pl: {
+    labourRate: (f, a, r, m) =>
+      `Stawka za roboczogodzinę. Kosztorys wycenia ${num(f.params.hours, 'pl')} godz. prac blacharsko-mechanicznych po ${m(f.params.rate)} za godzinę. Warsztaty w mojej okolicy stosują stawkę ${r} za godzinę. Różnica: ${a}.`,
+    paintRate: (f, a, r, m) =>
+      `Stawka za prace lakiernicze. Kosztorys wycenia ${num(f.params.hours, 'pl')} godz. prac lakierniczych po ${m(f.params.rate)} za godzinę, przy stawce lokalnej ${r} za godzinę. Różnica: ${a}.`,
+    deductions: (f, a) =>
+      `Potrącenia. Kosztorys obniża wypłatę przez potrącenia (liczba pozycji: ${f.params.count}), takie jak amortyzacja części lub rabaty. Nie wykazano, że rabaty te są dla mnie dostępne ani że montaż nowych części podniesie wartość pojazdu. Kwota potrąceń: ${a}.`,
+    vat: (f, a) =>
+      `VAT. Kosztorys sporządzono w kwotach netto. Nie mam prawa do odliczenia VAT, więc naprawa będzie mnie kosztować kwotę brutto. VAT ${num(f.params.rate, 'pl')}% od sumy kosztorysu: ${a}.`,
+    alternativeParts: (f) =>
+      `Kosztorys wycenia części (liczba pozycji: ${f.params.count}) jako zamienniki lub części używane. Proszę o podanie cen części oryginalnych i wyjaśnienie, dlaczego ich nie zastosowano.`,
+    missingCalibration: () =>
+      `Kosztorys przewiduje wymianę elementów, w których lub przy których zwykle znajdują się czujniki, kamery lub reflektory, a nie zawiera kalibracji. Proszę o potwierdzenie, czy kalibracja jest potrzebna, i uzupełnienie kosztorysu.`,
+    missingAlignment: () =>
+      `Kosztorys przewiduje wymianę elementów zawieszenia lub układu kierowniczego, a nie zawiera ustawienia geometrii kół. Proszę o jej dodanie albo wyjaśnienie, dlaczego nie jest potrzebna.`,
+    arithmetic: (f, _a, _r, m) =>
+      `Pozycje kosztorysu sumują się do ${m(f.params.lines)}, a wydrukowana suma to ${m(f.params.stated)}. Proszę o wyjaśnienie różnicy.`,
+  },
+};
+
+const FRAME = {
+  en: {
+    head: '[DATE]\n\n[FULL NAME]\n\nTo: [INSURER]\nClaim number: [CLAIM NUMBER]\n\nSubject: Request to review the repair estimate and pay the outstanding amount',
+    open: 'Dear Sir or Madam,\n\nI have reviewed the repair estimate issued for the claim above. I do not accept it as full settlement, because it understates the cost of repairing the vehicle in the following respects:',
+    vatUplift: (a: string, rate: string) => `VAT at ${rate}% on the differences listed above: ${a}.`,
+    total: (a: string) => `I therefore request an additional payment of ${a}.`,
+    questionsHead: 'Please also address the following points:',
+    close: 'Please pay the amount above within 14 days, or explain in writing, item by item, why you refuse. I reserve the right to have the vehicle assessed independently and to claim the full cost of repair.\n\nYours faithfully,\n[FULL NAME]',
+  },
+  pl: {
+    head: '[DATE]\n\n[FULL NAME]\n\nDo: [INSURER]\nNumer szkody: [CLAIM NUMBER]\n\nDotyczy: wniosek o weryfikację kosztorysu naprawy i dopłatę odszkodowania',
+    open: 'Szanowni Państwo,\n\nzapoznałem(-am) się z kosztorysem naprawy sporządzonym w powyższej sprawie. Nie uznaję go za pełne rozliczenie szkody, ponieważ zaniża koszt naprawy pojazdu w następujących punktach:',
+    vatUplift: (a: string, rate: string) => `VAT ${rate}% od różnic wymienionych powyżej: ${a}.`,
+    total: (a: string) => `W związku z tym wnoszę o dopłatę odszkodowania w kwocie ${a}.`,
+    questionsHead: 'Proszę również o odniesienie się do następujących kwestii:',
+    close: 'Proszę o wypłatę powyższej kwoty w terminie 14 dni albo o pisemne uzasadnienie odmowy, z odniesieniem do każdego punktu. Zastrzegam prawo do zlecenia niezależnej wyceny i dochodzenia pełnego kosztu naprawy.\n\nZ poważaniem\n[FULL NAME]',
+  },
+} as const;
+
+/** Builds the letter from the audit result alone. Every amount in it comes from the audit, not from a model. */
+export function draftLetter(estimate: Estimate, findings: Finding[], selected: Set<string>, tier: Tier, lang: Lang): string {
+  const chosen = findings.filter((f) => selected.has(f.id));
+  const withAmount = chosen.filter((f) => f.amounts && f.amounts[tier] > 0);
+  const questions = chosen.filter((f) => !f.amounts);
+  const frame = FRAME[lang];
+  const fmt = (n: number) => money(n, estimate.currency, lang);
+  const tierRate = (f: Finding) => (f.params.mid == null ? '' : fmt(Number(tier === 'cautious' ? f.params.low : tier === 'realistic' ? f.params.mid : f.params.high)));
+
+  const m: Fmt = (n) => fmt(Number(n));
+  const points = withAmount.map((f) => POINTS[lang][f.id](f, fmt(f.amounts![tier]), tierRate(f), m));
+  const upliftVat = vatOnUplift(findings, selected)[tier];
+  const vat = findings.find((f) => f.id === 'vat');
+  if (upliftVat > 0 && vat) points.push(frame.vatUplift(fmt(upliftVat), num(vat.params.rate, lang)));
+  const total = withAmount.reduce((s, f) => s + f.amounts![tier], 0) + upliftVat;
+
+  const parts: string[] = [frame.head, frame.open];
+  if (points.length > 0) {
+    parts.push(points.map((p, n) => `${n + 1}. ${p}`).join('\n'));
+    parts.push(frame.total(fmt(Math.round((total + Number.EPSILON) * 100) / 100)));
+  }
+  if (questions.length > 0) {
+    parts.push(`${frame.questionsHead}\n${questions.map((f) => `- ${POINTS[lang][f.id](f, '', '', m)}`).join('\n')}`);
+  }
+  parts.push(frame.close);
+  return parts.join('\n\n');
+}
+
+export function fillDetails(letter: string, details: LetterDetails, lang: Lang): string {
+  const date = new Intl.DateTimeFormat(LOCALE[lang], { dateStyle: 'long' }).format(new Date());
+  const put = (text: string, tag: string, value: string) => (value.trim() ? text.split(tag).join(value.trim()) : text);
+  let out = letter.split('[DATE]').join(date);
+  out = put(out, '[FULL NAME]', details.name);
+  out = put(out, '[INSURER]', details.insurer);
+  out = put(out, '[CLAIM NUMBER]', details.claimNumber);
+  return out;
+}
+
+export const POLISH_PROMPT: Record<Lang, string> = {
+  en: `Rewrite the letter below so that it reads as a clear, firm and polite letter from a private person to an insurance company. Write in English.
+Rules:
+- Keep every number and every amount exactly as written.
+- Keep every placeholder in square brackets exactly as written.
+- Keep the numbered points and their order.
+- Do not add facts, amounts, dates, laws or threats that are not in the letter.
+Return only the letter.
+
+LETTER:
+`,
+  pl: `Przeredaguj poniższe pismo tak, aby było jasnym, stanowczym i uprzejmym pismem osoby prywatnej do zakładu ubezpieczeń. Pisz po polsku.
+Zasady:
+- Zachowaj każdą liczbę i każdą kwotę dokładnie tak, jak w piśmie.
+- Zachowaj każdy znacznik w nawiasach kwadratowych dokładnie tak, jak w piśmie.
+- Zachowaj punkty numerowane i ich kolejność.
+- Nie dodawaj faktów, kwot, dat, przepisów ani gróźb, których nie ma w piśmie.
+Zwróć wyłącznie treść pisma.
+
+PISMO:
+`,
+};
+
+const digitsOf = (text: string) => (text.match(/\d+(?:[ \u00a0\u202f.,]\d+)*/g) ?? []).map((t) => t.replace(/\D/g, ''));
+const tagsOf = (text: string) => text.match(/\[[A-Z ]+\]/g) ?? [];
+
+/**
+ * Checks a model-edited letter against the draft it was made from.
+ * The edit is rejected if it contains a number the draft does not, drops a number, or drops a placeholder.
+ */
+export function verifyRewrite(draft: string, rewritten: string): { ok: boolean; reason?: 'number_added' | 'number_missing' | 'placeholder_missing' } {
+  const allowed = digitsOf(draft);
+  const got = digitsOf(rewritten);
+  if (got.some((n) => !allowed.includes(n))) return { ok: false, reason: 'number_added' };
+  if (allowed.some((n) => n.length >= 3 && !got.includes(n))) return { ok: false, reason: 'number_missing' };
+  const tags = new Set(tagsOf(rewritten));
+  if (tagsOf(draft).some((t) => !tags.has(t))) return { ok: false, reason: 'placeholder_missing' };
+  return { ok: true };
+}
