@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CloudNotAllowedError, firebaseConfigured, NotConfiguredError, run } from '../lib/ai';
+import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, DeviceTimeoutError, firebaseConfigured, NotConfiguredError, run } from '../lib/ai';
 import { TIERS, tierTotals } from '../lib/audit';
 import type { Key } from '../lib/i18n';
 import { draftLetter, fillDetails, money, POLISH_PROMPT, verifyRewrite, type LetterDetails } from '../lib/letter';
@@ -53,7 +53,8 @@ export function StepLetter({ estimate, findings, selected, tier, onTier, allowCl
         setMessage({ kind: 'error', text: t('polishRejected') });
       }
     } catch (err) {
-      if (err instanceof CloudNotAllowedError) setMessage({ kind: 'error', text: t('errCloudNotAllowed') });
+      if (err instanceof DeviceTimeoutError) setMessage({ kind: 'error', text: t('errDeviceTimeout', { s: DEVICE_START_TIMEOUT_S }) });
+      else if (err instanceof CloudNotAllowedError) setMessage({ kind: 'error', text: t('errCloudNotAllowed') });
       else if (err instanceof NotConfiguredError) setMessage({ kind: 'error', text: t('errNotConfigured') });
       else setMessage({ kind: 'error', text: t('errGeneric', { msg: err instanceof Error ? err.message : String(err) }) });
     } finally {

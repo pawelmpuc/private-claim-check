@@ -24,7 +24,7 @@ const en = {
   srcCloud: 'in the cloud',
   srcNone: 'no AI used',
   logRedactions: '{n} identifier(s) removed before sending',
-  logDeviceFailed: 'the device was tried first and failed',
+  logDeviceFailed: 'the device was tried first and did not answer',
 
   step1: '1. Add the estimate',
   step2: '2. Check the lines',
@@ -46,6 +46,7 @@ const en = {
   errCloudNotAllowed: 'On-device AI is not available here and the cloud is switched off. Switch the cloud on above, or type the lines in yourself.',
   errNotConfigured: 'AI is not connected in this copy of the app. Load the sample or type the lines in yourself.',
   errGeneric: 'Reading failed: {msg}',
+  errDeviceTimeout: 'The on-device model did not start within {s} seconds. Restart Chrome and try again, switch the cloud on above, or type the lines in yourself.',
   errNoLines: 'No estimate lines were found. Try a sharper photo, or type the lines in yourself.',
 
   reviewHint: 'AI can misread a document. Compare these lines with your estimate and correct anything that is wrong before you rely on the result.',
@@ -66,6 +67,7 @@ const en = {
   q_alternative: 'Non-original',
   q_used: 'Used',
   q_unknown: 'Not stated',
+  country: 'Country of the claim',
   currency: 'Currency',
   labourRate: 'Labour rate in the estimate (per hour)',
   paintRate: 'Paint rate in the estimate (per hour)',
@@ -158,7 +160,7 @@ const pl: Record<Key, string> = {
   srcCloud: 'w chmurze',
   srcNone: 'bez AI',
   logRedactions: 'przed wysłaniem usunięto identyfikatory: {n}',
-  logDeviceFailed: 'najpierw próbowano na urządzeniu, bez powodzenia',
+  logDeviceFailed: 'najpierw próbowano na urządzeniu, bez odpowiedzi',
 
   step1: '1. Dodaj kosztorys',
   step2: '2. Sprawdź pozycje',
@@ -180,6 +182,7 @@ const pl: Record<Key, string> = {
   errCloudNotAllowed: 'AI na urządzeniu nie jest tu dostępne, a chmura jest wyłączona. Włącz chmurę powyżej albo wpisz pozycje ręcznie.',
   errNotConfigured: 'W tej kopii aplikacji AI nie jest podłączone. Wczytaj przykład albo wpisz pozycje ręcznie.',
   errGeneric: 'Odczyt się nie powiódł: {msg}',
+  errDeviceTimeout: 'Model na urządzeniu nie wystartował w ciągu {s} sekund. Uruchom Chrome ponownie i spróbuj jeszcze raz, włącz chmurę powyżej albo wpisz pozycje ręcznie.',
   errNoLines: 'Nie znaleziono pozycji kosztorysu. Spróbuj z ostrzejszym zdjęciem albo wpisz pozycje ręcznie.',
 
   reviewHint: 'AI może źle odczytać dokument. Porównaj te pozycje ze swoim kosztorysem i popraw błędy, zanim oprzesz się na wyniku.',
@@ -200,6 +203,7 @@ const pl: Record<Key, string> = {
   q_alternative: 'Zamiennik',
   q_used: 'Używana',
   q_unknown: 'Nie podano',
+  country: 'Kraj szkody',
   currency: 'Waluta',
   labourRate: 'Stawka za roboczogodzinę w kosztorysie',
   paintRate: 'Stawka lakiernicza w kosztorysie (za godzinę)',

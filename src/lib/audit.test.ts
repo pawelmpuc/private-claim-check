@@ -3,13 +3,14 @@ import { audit, defaultSettings, netOfItems, tierTotals } from './audit';
 import { mergeEstimates, normalizeEstimate, parseCompact, parseModelJson, parseNumber } from './extract';
 import { draftLetter, verifyRewrite } from './letter';
 import { redact } from './redact';
+import { countryForCurrency } from './countries';
 import { sampleEstimate } from './sample';
 
 const all = (ids: string[]) => new Set(ids);
 
 describe('audit', () => {
   const estimate = sampleEstimate();
-  const settings = defaultSettings('PLN');
+  const settings = defaultSettings('PLN', 23);
   const findings = audit(estimate, settings);
   const byId = Object.fromEntries(findings.map((f) => [f.id, f]));
 
@@ -126,7 +127,7 @@ this line is noise`);
 
 describe('letter', () => {
   const estimate = sampleEstimate();
-  const findings = audit(estimate, defaultSettings('PLN'));
+  const findings = audit(estimate, defaultSettings('PLN', 23));
   const selected = all(findings.map((f) => f.id));
 
   it('states the same total as the audit', () => {
@@ -158,5 +159,14 @@ describe('redact', () => {
 
   it('leaves amounts alone', () => {
     expect(redact('Zderzak 1 240,00 PLN, robocizna 3,4 h x 95,00').count).toBe(0);
+  });
+});
+
+describe('countries', () => {
+  it('follows the currency of the estimate and keeps a fitting choice', () => {
+    expect(countryForCurrency('PLN', 'GB')).toBe('PL');
+    expect(countryForCurrency('EUR', 'NL')).toBe('NL');
+    expect(countryForCurrency('EUR', 'PL')).toBe('IE');
+    expect(countryForCurrency('CHF', 'PL')).toBe('OTHER');
   });
 });

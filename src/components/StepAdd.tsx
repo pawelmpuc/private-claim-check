@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { CloudNotAllowedError, firebaseConfigured, imagePart, NotConfiguredError, run } from '../lib/ai';
+import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, DeviceTimeoutError, firebaseConfigured, imagePart, NotConfiguredError, run } from '../lib/ai';
 import { emptyItem, mergeEstimates, normalizeEstimate, parseCompact, parseModelJson, READ_PROMPT, READ_PROMPT_COMPACT } from '../lib/extract';
 import { filesToPages, MAX_PAGES, type PageImage } from '../lib/files';
 import { redact } from '../lib/redact';
@@ -30,7 +30,8 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
 
   const fail = (err: unknown) => {
     if (abort.current?.signal.aborted) return;
-    if (err instanceof CloudNotAllowedError) setError(t('errCloudNotAllowed'));
+    if (err instanceof DeviceTimeoutError) setError(t('errDeviceTimeout', { s: DEVICE_START_TIMEOUT_S }));
+    else if (err instanceof CloudNotAllowedError) setError(t('errCloudNotAllowed'));
     else if (err instanceof NotConfiguredError) setError(t('errNotConfigured'));
     else setError(t('errGeneric', { msg: err instanceof Error ? err.message : String(err) }));
   };

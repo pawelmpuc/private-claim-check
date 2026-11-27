@@ -6,6 +6,7 @@ import { StepLetter } from './components/StepLetter';
 import { StepReview } from './components/StepReview';
 import { deviceStatus, type DeviceStatus } from './lib/ai';
 import { audit, defaultSettings } from './lib/audit';
+import { countryByCode, countryForCurrency } from './lib/countries';
 import { detectLang, translate } from './lib/i18n';
 import type { AuditSettings, Estimate, InferenceLogEntry, Lang, Tier } from './lib/types';
 import { LangContext } from './lib/useT';
@@ -16,6 +17,7 @@ export function App() {
   const [device, setDevice] = useState<DeviceStatus>('unavailable');
   const [log, setLog] = useState<InferenceLogEntry[]>([]);
   const [estimate, setEstimate] = useState<Estimate | null>(null);
+  const [country, setCountry] = useState<string>(() => (detectLang() === 'pl' ? 'PL' : 'GB'));
   const [settings, setSettings] = useState<AuditSettings>(() => defaultSettings('EUR'));
   const [deselected, setDeselected] = useState<Set<string>>(new Set());
   const [tier, setTier] = useState<Tier>('realistic');
@@ -33,15 +35,27 @@ export function App() {
     setLog((prev) => [...prev, { ...entry, at: Date.now() }]);
   }, []);
 
-  const loadEstimate = useCallback((next: Estimate) => {
-    setEstimate(next);
-    setSettings(defaultSettings(next.currency));
-    setDeselected(new Set());
-  }, []);
+  const loadEstimate = useCallback(
+    (next: Estimate) => {
+      const code = countryForCurrency(next.currency, country);
+      setCountry(code);
+      setEstimate(next);
+      setSettings(defaultSettings(next.currency, countryByCode(code).vat));
+      setDeselected(new Set());
+    },
+    [country],
+  );
 
   const changeCurrency = useCallback((currency: string) => {
     setEstimate((prev) => (prev ? { ...prev, currency } : prev));
-    setSettings(defaultSettings(currency));
+    setSettings((prev) => ({ ...defaultSettings(currency, prev.vatRatePct), totalIsNet: prev.totalIsNet, claimantDeductsVat: prev.claimantDeductsVat }));
+  }, []);
+
+  const changeCountry = useCallback((code: string) => {
+    const next = countryByCode(code);
+    setCountry(code);
+    setEstimate((prev) => (prev ? { ...prev, currency: next.currency } : prev));
+    setSettings((prev) => ({ ...defaultSettings(next.currency, next.vat), totalIsNet: prev.totalIsNet, claimantDeductsVat: prev.claimantDeductsVat }));
   }, []);
 
   const findings = useMemo(() => (estimate ? audit(estimate, settings) : []), [estimate, settings]);
@@ -82,7 +96,7 @@ export function App() {
 
         {estimate && (
           <>
-            <StepReview estimate={estimate} onChange={setEstimate} onCurrency={changeCurrency} settings={settings} onSettings={setSettings} />
+            <StepReview estimate={estimate} onChange={setEstimate} onCurrency={changeCurrency} country={country} onCountry={changeCountry} settings={settings} onSettings={setSettings} />
             <StepFindings estimate={estimate} findings={findings} selected={selected} onToggle={toggle} />
             <StepLetter estimate={estimate} findings={findings} selected={selected} tier={tier} onTier={setTier} allowCloud={allowCloud} onLog={addLog} />
           </>

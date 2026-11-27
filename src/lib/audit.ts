@@ -11,16 +11,14 @@ export const EXAMPLE_REF_RATES: Record<string, RefRates> = {
   USD: { low: 60, mid: 90, high: 140 },
 };
 
-export const DEFAULT_VAT: Record<string, number> = { PLN: 23, EUR: 21, GBP: 20, USD: 0 };
-
 export const TIERS: Tier[] = ['cautious', 'realistic', 'optimistic'];
 
-export function defaultSettings(currency: string): AuditSettings {
+export function defaultSettings(currency: string, vatRatePct = 20): AuditSettings {
   return {
     refRates: EXAMPLE_REF_RATES[currency] ?? EXAMPLE_REF_RATES.EUR,
     totalIsNet: true,
     claimantDeductsVat: false,
-    vatRatePct: DEFAULT_VAT[currency] ?? 20,
+    vatRatePct,
   };
 }
 

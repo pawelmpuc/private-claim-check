@@ -1,3 +1,4 @@
+import { COUNTRIES } from '../lib/countries';
 import { emptyItem } from '../lib/extract';
 import type { Key } from '../lib/i18n';
 import type { AuditSettings, Estimate, EstimateItem, ItemKind, PartQuality } from '../lib/types';
@@ -7,6 +8,8 @@ interface Props {
   estimate: Estimate;
   onChange: (estimate: Estimate) => void;
   onCurrency: (currency: string) => void;
+  country: string;
+  onCountry: (code: string) => void;
   settings: AuditSettings;
   onSettings: (settings: AuditSettings) => void;
 }
@@ -30,8 +33,8 @@ function NumberField({ label, value, onChange, step = 'any' }: { label: string; 
   );
 }
 
-export function StepReview({ estimate, onChange, onCurrency, settings, onSettings }: Props) {
-  const { t } = useT();
+export function StepReview({ estimate, onChange, onCurrency, country, onCountry, settings, onSettings }: Props) {
+  const { t, lang } = useT();
   const currencies = CURRENCIES.includes(estimate.currency) ? CURRENCIES : [estimate.currency, ...CURRENCIES];
 
   const patchItem = (id: string, patch: Partial<EstimateItem>) =>
@@ -43,6 +46,16 @@ export function StepReview({ estimate, onChange, onCurrency, settings, onSetting
       <p className="notice">{t('reviewHint')}</p>
 
       <div className="fields">
+        <label className="field">
+          <span>{t('country')}</span>
+          <select value={country} onChange={(e) => onCountry(e.target.value)}>
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name[lang]}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="field">
           <span>{t('currency')}</span>
           <select value={estimate.currency} onChange={(e) => onCurrency(e.target.value)}>

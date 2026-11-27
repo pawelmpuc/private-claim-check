@@ -13,8 +13,9 @@ A repair estimate carries a name, an address, a number plate, a VIN and a claim 
 1. **Reads the estimate.** A photo, a PDF or pasted text becomes a table of lines: parts, labour, paint, materials and deductions. PDFs are rendered to images in the browser, so they can be read on-device too.
 2. **Lets you correct it.** Every line is editable. The audit never runs on text the user has not seen.
 3. **Finds what is missing.** A rule engine written in plain TypeScript compares the estimate with hourly rates the user enters and lists the shortfalls: labour rate, paint rate, depreciation and discounts, VAT. It also raises questions that have no amount: non-original parts, missing calibration, missing wheel alignment, totals that do not add up.
-4. **Shows three totals.** Cautious, realistic and optimistic, one for each local rate the user entered.
-5. **Writes the letter.** The letter is assembled from the audit result. The model may then improve the wording, and the app checks its output.
+4. **Adapts to the country.** The country of the claim sets the currency and the default VAT rate; both stay editable.
+5. **Shows three totals.** Cautious, realistic and optimistic, one for each local rate the user entered.
+6. **Writes the letter.** The letter is assembled from the audit result. The model may then improve the wording, and the app checks its output.
 
 ## How AI is used, and where it is not
 
@@ -39,6 +40,8 @@ All inference goes through Firebase AI Logic (`src/lib/ai.ts`). The app does not
 2. If it is, run with `InferenceMode.ONLY_ON_DEVICE` and the full document.
 3. If it is not, or the device run fails, and the user has allowed the cloud, run with `InferenceMode.ONLY_IN_CLOUD`. Pasted text is redacted first (`src/lib/redact.ts`): emails, phone numbers, VINs, plates, IBANs and 11-digit ID numbers. Photos cannot be redacted, and the interface says so.
 4. If the cloud is not allowed, stop and say why.
+
+A browser can report the on-device model as available and still fail to start it. The device attempt is therefore abandoned when no text arrives within 90 seconds, and the app then follows steps 3 and 4.
 
 The panel at the top of the page logs each request with the place it ran, taken from `response.inferenceSource`.
 

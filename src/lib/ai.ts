@@ -15,6 +15,10 @@ export type DeviceStatus = 'available' | 'downloadable' | 'downloading' | 'unava
 
 export class NotConfiguredError extends Error {}
 export class CloudNotAllowedError extends Error {}
+export class DeviceTimeoutError extends Error {}
+
+/** How long the on-device model may take to produce its first text before the app gives up on it. */
+export const DEVICE_START_TIMEOUT_S = 90;
 
 const env = import.meta.env;
 
@@ -107,21 +111,44 @@ export async function run(req: RunRequest): Promise<RunResult> {
   let deviceError: string | undefined;
   const lang = req.outputLang ?? 'en';
   const options = req.signal ? { signal: req.signal } : undefined;
+  let deviceTimedOut = false;
   if ((await deviceStatus(lang)) === 'available') {
-    try {
-      const result = await model(InferenceMode.ONLY_ON_DEVICE, lang).generateContentStream(req.deviceParts, options);
+    // A browser can report the model as available and still never start it, so the
+    // device attempt is abandoned if no text arrives in time.
+    const attempt = new AbortController();
+    const forward = () => attempt.abort();
+    req.signal?.addEventListener('abort', forward);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        deviceTimedOut = true;
+        attempt.abort();
+        reject(new DeviceTimeoutError(`No answer from the on-device model after ${DEVICE_START_TIMEOUT_S} seconds.`));
+      }, DEVICE_START_TIMEOUT_S * 1000);
+    });
+    const stream = (async () => {
+      const result = await model(InferenceMode.ONLY_ON_DEVICE, lang).generateContentStream(req.deviceParts, { signal: attempt.signal });
       let text = '';
       for await (const chunk of result.stream) {
+        clearTimeout(timer);
         text += chunk.text();
         req.onText?.(text);
       }
-      return { text, source: 'on_device' };
+      return text;
+    })();
+    stream.catch(() => undefined);
+    try {
+      return { text: await Promise.race([stream, timeout]), source: 'on_device' };
     } catch (err) {
       if (req.signal?.aborted) throw err;
       deviceError = err instanceof Error ? err.message : String(err);
+    } finally {
+      clearTimeout(timer);
+      req.signal?.removeEventListener('abort', forward);
     }
   }
   if (!req.allowCloud) {
+    if (deviceTimedOut) throw new DeviceTimeoutError(deviceError);
     throw new CloudNotAllowedError(deviceError ?? 'The on-device model is not available.');
   }
   const result = await model(InferenceMode.ONLY_IN_CLOUD, lang, req.cloudJson ? {} : undefined).generateContent(req.cloudParts, options);
