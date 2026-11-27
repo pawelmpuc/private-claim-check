@@ -103,6 +103,11 @@ export async function nativeDebugToken(): Promise<string> {
   }
 }
 
+/** Tells the Android app that the hands-free self-test has finished, so a device-farm run can end. */
+export function nativeSelfTestDone(): void {
+  nativeBridge?.post(JSON.stringify({ id: 'selftest', op: 'selfTestDone' }));
+}
+
 /** Text and images in the shape the native bridge takes. */
 const nativeParts = (parts: Array<string | Part>) =>
   parts.map((part) => (typeof part === 'string' ? { text: part } : 'inlineData' in part ? { data: part.inlineData.data, mimeType: part.inlineData.mimeType } : { text: 'text' in part ? part.text : '' }));

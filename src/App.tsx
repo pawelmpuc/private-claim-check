@@ -85,6 +85,26 @@ export function App() {
 
   const t = (key: Parameters<typeof translate>[1], params?: Record<string, string | number>) => translate(lang, key, params);
 
+  // The self-test stands alone: on a device farm a crawler taps whatever it finds, and a tap
+  // that sends the app to the background would stop an on-device request.
+  if (SELF_TEST) {
+    return (
+      <LangContext.Provider value="en">
+        <header className="top">
+          <div className="wrap top-row">
+            <div>
+              <h1>{translate('en', 'appName')}</h1>
+              <p className="tagline">{navigator.userAgent}</p>
+            </div>
+          </div>
+        </header>
+        <main className="wrap">
+          <SelfTest />
+        </main>
+      </LangContext.Provider>
+    );
+  }
+
   return (
     <LangContext.Provider value={lang}>
       <header className="top">
@@ -105,7 +125,6 @@ export function App() {
 
       <main className="wrap">
         <PrivacyPanel device={device} onDeviceChange={refreshDevice} allowCloud={allowCloud} onAllowCloud={setAllowCloud} log={log} />
-        {SELF_TEST && <SelfTest />}
 
         <StepAdd allowCloud={allowCloud} fallbackCurrency={countryByCode(country).currency} onEstimate={loadEstimate} onLog={addLog} hasEstimate={estimate != null} onReset={() => { setEstimate(null); setQuote(null); }} />
 

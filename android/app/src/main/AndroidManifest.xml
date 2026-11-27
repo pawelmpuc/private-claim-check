@@ -19,6 +19,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Firebase Test Lab "game loop": starts the app with nobody at the screen. The app then runs its on-device self-test. -->
+            <intent-filter>
+                <action android:name="com.google.intent.action.TEST_LOOP" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/javascript" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

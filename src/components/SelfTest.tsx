@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { deviceStatus, downloadDeviceModel, isNativeApp, run } from '../lib/ai';
+import { deviceStatus, downloadDeviceModel, isNativeApp, nativeSelfTestDone, run } from '../lib/ai';
 import { explainPrompt, inventedFigure } from '../lib/explain';
 import { sampleEstimate } from '../lib/sample';
 
@@ -25,7 +25,7 @@ export function SelfTest() {
       console.log(`[PCC selftest] ${step}: ${result}`);
       if (!stop) setLines((old) => [...old.filter((l) => l.step !== step), { step, result, ok }]);
     };
-    void (async () => {
+    const test = async () => {
       say('Platform', isNativeApp ? 'Android app, Firebase AI Logic Android SDK' : 'Browser, Firebase AI Logic web SDK', null);
       let status = await deviceStatus('en');
       say('On-device model', status, status !== 'unavailable');
@@ -55,7 +55,11 @@ export function SelfTest() {
       } catch (err) {
         say('On-device request', `failed: ${err instanceof Error ? err.message : String(err)}`, false);
       }
-    })();
+    };
+    void test().finally(() => {
+      say('Self-test', 'finished', null);
+      nativeSelfTestDone();
+    });
     return () => {
       stop = true;
     };

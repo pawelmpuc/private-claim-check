@@ -34,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap
  * page's consent and redaction rules hold here exactly as they do in Chrome.
  */
 @OptIn(PublicPreviewAPI::class)
-class AiBridge(private val webView: WebView) {
+class AiBridge(private val webView: WebView, private val onSelfTestDone: () -> Unit) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val running = ConcurrentHashMap<String, Job>()
 
@@ -46,6 +46,8 @@ class AiBridge(private val webView: WebView) {
         val id = msg.getString("id")
         when (msg.optString("op")) {
             "cancel" -> running.remove(id)?.cancel()
+            // The hands-free self-test is over: the activity closes a little later, which ends a Test Lab run.
+            "selfTestDone" -> webView.post { onSelfTestDone() }
             else -> running[id] = scope.launch {
                 try {
                     if (!App.configured) throw IllegalStateException("not_configured")

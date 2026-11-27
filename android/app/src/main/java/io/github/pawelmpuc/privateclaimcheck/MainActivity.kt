@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.WindowManager
 import android.webkit.ConsoleMessage
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -70,7 +71,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        bridge = AiBridge(webView)
+        bridge = AiBridge(webView) { webView.postDelayed({ finish() }, 20_000) }
         // The bridge is only exposed to the pages packed into the APK: nothing else is ever loaded in this WebView.
         webView.addJavascriptInterface(bridge, "PccNative")
         setContentView(webView)
@@ -82,7 +83,9 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             // In Firebase Test Lab nobody taps the screen: open the hands-free on-device self-test.
             val inTestLab = Settings.System.getString(contentResolver, "firebase.test.lab") == "true"
-            val query = if (inTestLab || intent.getBooleanExtra("selftest", false)) "?selftest" else ""
+            val selfTest = inTestLab || intent.action == "com.google.intent.action.TEST_LOOP" || intent.getBooleanExtra("selftest", false)
+            if (selfTest) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            val query = if (selfTest) "?selftest" else ""
             webView.loadUrl("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/www/index.html$query")
         } else {
             webView.restoreState(savedInstanceState)
