@@ -605,8 +605,8 @@ Net Total: | 2,238.32`], 'USD');
       ['Bdy-S', 'labour', 1.5, 46, 69],
       ['Refinish', 'paint', 8.1, 46, 382.6],
       ['Mechanical', 'labour', 9.7, 65, 630.5],
-      ['Total Replacement Parts', 'part', null, null, 456.72],
       ['Total Additional Costs', 'other', null, null, 304.99],
+      ['Total Replacement Parts', 'part', null, null, 456.72],
     ]);
     expect(out.estimate).toMatchObject({ labourRate: 46, paintRate: 46 });
     // The grand total is the rows plus labour tax, so nothing is reported as missing.
@@ -650,6 +650,182 @@ K O S Z T Y N A P R A W Y Z VAT ............ | 4 954.50`;
       ['part', null, 2322.54],
     ]);
     expect(netOfItems(out.estimate)).toBe(4028.05);
+  });
+
+  it('reads a real Audatex block with deductions after the gross total', () => {
+    // Layout of a real PL calculation: the cover page repeats the totals and deductions,
+    // letter-spaced headings come split over cells, amounts carry a trailing minus.
+    const cover = `K O S Z T Y | N A P R A W Y | BEZ | VAT | PLN | 1 594.62
+VAT | 23.00 % | PLN | 366.76
+K O S Z T Y | N A P R A W Y | Z | VAT | PLN | 1 961.38
+UBYTEK WARTOŚCI LAKIEROWANIE | PLN | 73.20-
+POTRĄCENIE KOSZTÓW NAPRAWY | PLN | 159.46-
+S U M A | O G Ó L N A | BEZ VAT (PO POTRĄCENIACH) | PLN | 1 361.96`;
+    const paintPage = `L A K I E R O W A N I E (według | AZT)
+KOŃCOWA ROBOCIZNA LAKIER | 10 JC/RBG : | 54 | 280.80
+WSPÓŁCZYNNIK ODCHYLENIA | 55.00 % | 356.04-`;
+    const block = `K A L K U L A C J A | K O Ń C O W A | PLN | PLN
+R O B O C I Z N A | BAZA CZASOWA | 10 JC = 1 RBG
+RAZEM KL 2 | 12 JC | X | 52.00 | PLN/RBG | 62.40
+RAZEM KL 3 | 5 JC | X | 52.00 | PLN/RBG | 26.00
+RAZEM ROBOCIZNA | ..................................... | 88.40
+L A K I E R O W A N I E
+KOSZTY ROBOCIZNY | 280.80
+KOSZTY MATERIAŁU | 435.16
+RAZEM LAKIEROWANIE | ...................................... | 715.96
+C Z Ę Ś C I | Z A M I E N N E | 790.26
+RAZEM CZĘŚCI ZAMIENNE | ..................................... | 790.26
+K O S Z T Y | N A P R A W Y | BEZ | VAT | .................... | 1 594.62
+VAT | 23.00 % | 366.76
+K O S Z T Y | N A P R A W Y | Z | VAT | ..................... | 1 961.38
+P O T R Ą C E N I A
+UBYTEK WARTOŚĆI LAKIER. | 73.20-
+POTRĄCENIE KOSZTÓW NAPRAWY | 10.00 % | 159.46-
+RAZEM POTRĄCENIA WARTOŚCI BEZ VAT ........................... | 232.66-
+S U M A | K O Ń C O W A BEZ VAT (PO POTRĄCENIACH)............ | 1 361.96
+VAT | 23.00 % | 313.25
+S U M A | K O Ń C O W A | Z VAT (PO POTRĄCENIACH)............. | 1 675.21
+K A L K U L A C J A | K O Ń C O W A | PLN | PLN
+C Z Ę Ś C I | Z A M I E N N E | 999.99`;
+    const out = parseDocumentText([cover, paintPage, block]);
+    expect(out.from).toBe('summary');
+    expect(out.taxRatePct).toBe(23);
+    expect(out.estimate).toMatchObject({ currency: 'PLN', labourRate: 52, paintRate: 52, statedTotal: 1361.96 });
+    expect(out.estimate.items.map((i) => [i.kind, i.hours, i.total])).toEqual([
+      ['labour', 1.7, 88.4],
+      ['paint', 5.4, 280.8],
+      ['material', null, 435.16],
+      ['part', null, 790.26],
+      ['deduction', null, 73.2],
+      ['deduction', null, 159.46],
+    ]);
+    expect(sumMismatch(out.estimate)).toBeNull();
+    const deductions = audit(out.estimate, defaultSettings('PLN', 23)).find((f) => f.id === 'deductions')!;
+    expect(deductions.amounts?.realistic).toBe(232.66);
+  });
+
+  it('adds up Audatex time classes and extra costs', () => {
+    const out = parseDocumentText([`W A R T O Ś Ć | K O Ń C O W A | PLN | PLN
+R O B O C I Z N A | BAZA CZASOWA | 10 JC = 1 RBG
+RAZEM KL 1 | 10 JC | X | 55.00 | PLN/RBG | 55.00
+RAZEM KL 2 | 176 JC | X | 55.00 | PLN/RBG | 968.00
+POMIARY KL 2 | 14 JC | X | 55.00 | PLN/RBG | 77.00
+RAZEM ROBOCIZNA | ..................................... | 1 100.00
+K O S Z T Y | D O D A T K O W E
+TOTAL CL 3 | 2 JC | X | 55.00 | PLN/RBG | 11.00
+RAZEM KOSZTY DODATKOWE | ..................................... | 11.00
+L A K I E R O W A N I E
+KOSZTY ROBOCIZNY | 1 254.00
+KOSZTY MATERIAŁU | 2 642.52
+C Z Ę Ś C I | Z A M I E N N E | 17 631.75
+W A R T O Ś Ć | BEZ | VAT | .................... | 22 639.27
+VAT | 23.00 % | 5 207.03
+W A R T O Ś Ć | Z | VAT | ..................... | 27 846.30`]);
+    expect(out.from).toBe('summary');
+    expect(out.estimate.items.map((i) => [i.kind, i.hours, i.unitPrice, i.total])).toEqual([
+      ['labour', 20, 55, 1100],
+      ['other', null, null, 11],
+      ['paint', null, null, 1254],
+      ['material', null, null, 2642.52],
+      ['part', null, null, 17631.75],
+    ]);
+    expect(sumMismatch(out.estimate)).toBeNull();
+  });
+
+  it('reads a German Audatex Schlusskalkulation', () => {
+    const out = parseDocumentText([`GESAMT-LACKIERZEIT | 12 AW/STD : | 82.8 | 1372.41
+S C H L U S S K A L K U L A T I O N | EUR | EUR
+A R B E I T S L O H N | ZEITBASIS | 12 AW = 1 STD
+GESAMT KL 1 | 36 AW | X | 137.00 | EUR/STD | 411.00
+GESAMT KL 2 | 7 AW | X | 137.00 | EUR/STD | 79.92
+GESAMTSUMME ARBEITSLOHN ..................................... | 490.92
+L A C K I E R U N G
+ARBEITSKOSTEN | 1 372.41
+MATERIALKOSTEN | 339.97
+E R S A T Z T E I L E | 1 887.21
+KLEINERSATZTEILE ( | 2.0%) | 37.74
+SCHWEMM-MATERIAL | 10.00
+GESAMTSUMME ERSATZTEILE ..................................... | 1 934.95
+R E P A R A T U R K O S T E N | OHNE MWST.................... | 4 138.25
+MWST 19.00 % | 786.27
+R E P A R A T U R K O S T E N | MIT MWST..................... | 4 924.52`], 'GBP');
+    expect(out.from).toBe('summary');
+    expect(out.taxRatePct).toBe(19);
+    expect(out.estimate).toMatchObject({ currency: 'EUR', labourRate: 137, paintRate: 198.9, statedTotal: 4138.25 });
+    expect(out.estimate.items.map((i) => [i.kind, i.hours, i.total])).toEqual([
+      ['labour', 3.58, 490.92],
+      ['paint', 6.9, 1372.41],
+      ['material', null, 339.97],
+      ['part', null, 1934.95],
+    ]);
+    expect(sumMismatch(out.estimate)).toBeNull();
+  });
+
+  it('reads a German Audatex paint section with its own labour row', () => {
+    const out = parseDocumentText([`S C H L U S S K A L K U L A T I O N | EUR | EUR
+A R B E I T S L O H N | ZEITBASIS | 10 AW = 1 STD
+GESAMT | 19.0 AW | X | 145.00 | EUR/STD | 275.50
+GESAMTSUMME ARBEITSLOHN ..................................... | 275.50
+L A C K I E R U N G | ZEITBASIS | 10 AW = 1 STD
+ARBEITSLOHN | 22.0 AW | X | 205.00 | EUR/STD | 451.00
+LACKIERMATERIAL | 35.00 % | 157.85
+E R S A T Z T E I L E | 1 016.66
+KLEINERSATZTEILE ( | 2.0%) | 20.33
+GESAMTSUMME ERSATZTEILE ..................................... | 1 036.99
+R E P A R A T U R K O S T E N | OHNE MWST.................... | 1 921.34`]);
+    expect(out.estimate).toMatchObject({ labourRate: 145, paintRate: 205, statedTotal: 1921.34 });
+    expect(out.estimate.items.map((i) => [i.kind, i.hours, i.total])).toEqual([
+      ['labour', 1.9, 275.5],
+      ['paint', 2.2, 451],
+      ['material', null, 157.85],
+      ['part', null, 1016.66],
+      ['part', null, 20.33],
+    ]);
+  });
+
+  it('reads the Eurotax summary with VAT split in two rows', () => {
+    const out = parseDocumentText([`Łącznie | 3,80 | 0,00
+Podsumowanie | Rbg. | Stawka | Kwota
+Części zamienne | 1 200,00
+Materiał lakierniczy | 100% | 1 544,05
+Blacharz | 3,80 | 85,00 | 323,00
+Lakiernik | 9,70 | 85,00 | 824,50
+Mat. drobne i dodatkowe (2% od części) | 24,00
+Koszty naprawy łącznie (netto) | 3 915,55
+VAT (Materiał) 23% | 637,13
+VAT (Robocizna) 23% | 263,44
+Koszt naprawy łącznie (brutto) | 4 816,12
+Koszt naprawy kwota słownie: cztery tysiące osiemset szesnaście zł, groszy 12/100`]);
+    expect(out.from).toBe('summary');
+    expect(out.estimate).toMatchObject({ currency: 'PLN', labourRate: 85, paintRate: 85, statedTotal: 3915.55 });
+    expect(out.estimate.items.map((i) => [i.kind, i.hours, i.total])).toEqual([
+      ['part', null, 1200],
+      ['material', null, 1544.05],
+      ['labour', 3.8, 323],
+      ['paint', 9.7, 824.5],
+      ['other', null, 24],
+    ]);
+    expect(sumMismatch(out.estimate)).toBeNull();
+  });
+
+  it('reads a DEKRA final calculation printed beside the address', () => {
+    const out = parseDocumentText([`Kalkulacja końcowa
+Zleceniodawca: | Rzeczoznawca: Jan Kowalski
+Firma Leasingowa Sp. z o.o. | Rodzaj kosztów | Czas [rbg] | Koszt [zł] | Normalia [zł] | Razem [zł]
+ul. Przykładowa 1 | Robocizna | 4.8 | 528,00 | 528,00
+00-001 Warszawa | Lakierowanie | 9.9 | 1 089,00 | 832,90 | 1 921,90
+00-001 Warszawa | Koszt naprawy (netto) | 2 449,90
+VAT (23%) | 563,48
+Koszt naprawy (brutto) | 3 013,38
+Zderzak przedni a-d | K3 | 1.72 | 394,80`]);
+    expect(out.from).toBe('summary');
+    expect(out.estimate).toMatchObject({ currency: 'PLN', labourRate: 110, paintRate: 110, statedTotal: 2449.9 });
+    expect(out.estimate.items.map((i) => [i.kind, i.hours, i.total])).toEqual([
+      ['labour', 4.8, 528],
+      ['paint', 9.9, 1089],
+      ['material', null, 832.9],
+    ]);
+    expect(sumMismatch(out.estimate)).toBeNull();
   });
 
   it('leaves a plain table to the row parser', () => {

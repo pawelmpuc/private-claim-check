@@ -43,7 +43,7 @@ const en = {
   step3: '3. What is missing',
   step4: '4. Your letter',
 
-  uploadHint: 'Photo or PDF of the repair estimate from your insurer (up to {n} pages).',
+  uploadHint: 'Photo or PDF of the repair estimate from your insurer (up to {n} pages; a PDF with its own text is read in full).',
   chooseFiles: 'Choose photo or PDF',
   orPaste: 'or paste the text of the estimate',
   pastePlaceholder: 'Paste the estimate text here…',
@@ -239,7 +239,7 @@ const pl: Record<Key, string> = {
   step3: '3. Czego brakuje',
   step4: '4. Twoje pismo',
 
-  uploadHint: 'Zdjęcie lub PDF kosztorysu naprawy od ubezpieczyciela (do {n} stron).',
+  uploadHint: 'Zdjęcie lub PDF kosztorysu naprawy od ubezpieczyciela (do {n} stron; PDF z własnym tekstem jest czytany w całości).',
   chooseFiles: 'Wybierz zdjęcie lub PDF',
   orPaste: 'albo wklej tekst kosztorysu',
   pastePlaceholder: 'Wklej tutaj tekst kosztorysu…',

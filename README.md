@@ -110,10 +110,13 @@ Each installation of a debug build makes its own App Check debug token and shows
 | CCC ONE estimate, 6 pages, published with personal data removed | Text layer, totals block | Parts, labour hours and rates, paint and the total match the document |
 | CCC ONE estimate, 8 pages, from a public US safety filing | Text layer, totals block | Same |
 | Mitchell estimate, published sample | Text layer, totals block | Labour rows and totals match; the document names no currency, so the country setting supplies it |
-| Audatex calculation (Poland) | Unit test only | The fixture was typed from a published image of the final calculation block. No real Audatex file has been run through the app |
+| Audatex calculations, Poland: an insurer's estimate, 9 pages, with deductions; a PZU damage assessment, 11 pages. Both published on the web | Text layer, final calculation block (pages 4 and 10) | Labour hours and rate, paint hours and rate, paint materials, parts, extra costs, VAT and the total match the document. Deductions printed after the gross total (paint value loss, 10% repair deduction) are read and flagged |
+| Audatex Schlusskalkulation, Germany, 24 and 31 pages, both published on the web | Text layer, final calculation block | Labour, paint labour and time, paint materials, parts and the net total match; currency EUR, VAT 19% |
+| Eurotax estimates, Poland, 2 and 7 pages, published on the web | Text layer, summary table | Labour and paint hours and rates, paint materials, parts, small parts and the net total match; two VAT rows (materials, labour) added up |
+| DEKRA expert report built on Eurotax, Poland, 1 page, published on the web | Text layer, final calculation printed beside the address | Labour and paint hours, paint materials and the net total match |
 | Fictional samples in `docs/samples` | Text layer, and Gemini Nano on the scanned quote | All categories and totals correct on the test laptop |
 
-The real documents are not in this repository. The unit tests for the transcription parser use output Gemini Nano actually produced, misreadings included.
+The real documents are not in this repository; they carry names, plates and VINs. The unit tests for these layouts use short fragments of the totals blocks with no personal data. The unit tests for the transcription parser use output Gemini Nano actually produced, misreadings included.
 
 ## Run it
 

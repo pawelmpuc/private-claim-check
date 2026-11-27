@@ -29,6 +29,18 @@ async function imageToPage(file: File): Promise<PageImage> {
   return canvasToPage(canvas);
 }
 
+/** Real calculations put the totals block on page 4 to 20, so the text is read further than the images. */
+const MAX_TEXT_PAGES = 40;
+
+function pageText(content: { items: unknown[] }): string | undefined {
+  const runs: TextRun[] = [];
+  for (const item of content.items as Array<{ str?: string; transform: number[]; width: number; height: number }>) {
+    if (typeof item.str === 'string') runs.push({ str: item.str, x: item.transform[4], y: item.transform[5], width: item.width, height: item.height || Math.abs(item.transform[3]) });
+  }
+  const lines = layoutLines(runs);
+  return hasTextLayer(lines) ? lines.join('\n') : undefined;
+}
+
 async function pdfToPages(file: File): Promise<PageImage[]> {
   const pdfjs = await import('pdfjs-dist');
   const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
@@ -44,14 +56,18 @@ async function pdfToPages(file: File): Promise<PageImage[]> {
     canvas.height = Math.round(viewport.height);
     await page.render({ canvas, canvasContext: canvas.getContext('2d')!, viewport }).promise;
     const out = canvasToPage(canvas);
-    const content = await page.getTextContent();
-    const runs: TextRun[] = [];
-    for (const item of content.items) {
-      if ('str' in item) runs.push({ str: item.str, x: item.transform[4], y: item.transform[5], width: item.width, height: item.height || Math.abs(item.transform[3]) });
-    }
-    const lines = layoutLines(runs);
-    if (hasTextLayer(lines)) out.text = lines.join('\n');
+    out.text = pageText(await page.getTextContent());
     pages.push(out);
+  }
+  // Pages past the image limit are not shown or sent anywhere; only their text is read, here.
+  const more: string[] = [];
+  for (let n = MAX_PAGES + 1; n <= Math.min(doc.numPages, MAX_TEXT_PAGES); n += 1) {
+    const text = pageText(await (await doc.getPage(n)).getTextContent());
+    if (text) more.push(text);
+  }
+  if (more.length > 0 && pages.length > 0) {
+    const lastPage = pages[pages.length - 1];
+    lastPage.text = [lastPage.text, ...more].filter(Boolean).join('\n');
   }
   return pages;
 }
