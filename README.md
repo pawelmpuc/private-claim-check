@@ -37,7 +37,7 @@ The model never produces a figure the user relies on. Three checks hold that lin
 
 - The model never calculates. It returns rows; `src/lib/audit.ts` and `src/lib/compare.ts` do the arithmetic.
 - An explanation is shown only if every figure in it also appears in the estimate (`inventedFigure` in `src/lib/explain.ts`). Gemini Nano once wrote "US$0.00" next to each part; the check discarded that answer.
-- Reworded paragraphs are accepted only if they came back as two clean paragraphs with the same figures in the same order and no blanks to fill in (`applyPolish` in `src/lib/letter.ts`). Otherwise the plain version stays, and the app says what failed.
+- Reworded paragraphs are accepted only if they came back as two clean paragraphs with the same figures in the same order and no blanks to fill in, and only if the opening still refuses the estimate and the closing still asks for payment (`applyPolish` in `src/lib/letter.ts`). On the test laptop Gemini Nano once turned "please pay within 14 days" into "please confirm your understanding"; that version is now rejected. Otherwise the plain version stays, and the app says what failed.
 
 ## Hybrid routing
 
