@@ -20,7 +20,7 @@ export function explainPrompt(estimate: Estimate, lang: Lang): string {
     sum(kind) > 0 ? `${label}: ${hours(kind) > 0 ? `${hours(kind)} hours` : ''}${hours(kind) > 0 && rate != null ? ` at ${fmt(rate)} per hour` : ''}${hours(kind) > 0 ? ', ' : ''}${fmt(sum(kind))}` : '';
   // The facts are worked out here, so the model only has to put them into sentences.
   const facts = [
-    parts ? `Parts and work listed: ${parts}` : '',
+    parts ? `Parts and jobs named on the estimate (no single prices are given to you): ${parts}` : '',
     sum('part') > 0 ? `Parts cost together: ${fmt(sum('part'))}` : '',
     timed('Body and mechanical labour allowed', 'labour', estimate.labourRate),
     timed('Paint labour allowed', 'paint', estimate.paintRate),
@@ -34,6 +34,7 @@ export function explainPrompt(estimate: Estimate, lang: Lang): string {
 Rules:
 - Use only the figures in the facts and copy them exactly.
 - Do not calculate anything and do not combine two facts into a new figure.
+- Name the parts and jobs in one sentence, without a price for any single one.
 - An amount taken off is money the insurer cut from the payout. Its heading is the insurer's name for the cut, not the name of a company.
 - Do not give advice and do not judge whether the estimate is fair.
 - No headings and no lists.
