@@ -9,36 +9,36 @@ import type { Estimate, Lang } from './types';
  */
 export function explainPrompt(estimate: Estimate, lang: Lang): string {
   const fmt = (n: number) => money(n, estimate.currency, lang);
-  const kinds: Record<string, string> = { part: 'part', labour: 'labour', paint: 'paint labour', material: 'paint materials', deduction: 'deduction', other: 'other' };
-  const lines = estimate.items.map((i) => {
-    const hours = i.hours != null ? `, ${i.hours} hours` : '';
-    const quality = i.kind === 'part' && i.partQuality !== 'unknown' ? `, ${i.partQuality === 'oem' ? 'original part' : i.partQuality === 'used' ? 'used part' : 'non-original part'}` : '';
-    return `- ${i.desc} (${kinds[i.kind]}${quality}${hours}): ${i.kind === 'deduction' ? 'minus ' : ''}${fmt(Math.abs(i.total ?? 0))}`;
-  });
-  const sum = (kind: string) => estimate.items.filter((i) => i.kind === kind).reduce((t, i) => t + Math.abs(i.total ?? 0), 0);
-  const hoursOf = (kind: string) => estimate.items.filter((i) => i.kind === kind).reduce((t, i) => t + (i.hours ?? 0), 0);
-  const round = (n: number) => Math.round(n * 100) / 100;
-  // Subtotals are given so that the model does not have to add anything up itself.
+  const of = (kind: string) => estimate.items.filter((i) => i.kind === kind);
+  const sum = (kind: string) => of(kind).reduce((t, i) => t + Math.abs(i.total ?? 0), 0);
+  const hours = (kind: string) => Math.round(of(kind).reduce((t, i) => t + (i.hours ?? 0), 0) * 100) / 100;
+  const names = (kind: string) => of(kind).map((i) => i.desc).join('; ');
+  const quality = (q: string) => (q === 'oem' ? ' (original)' : q === 'used' ? ' (used)' : q === 'alternative' ? ' (non-original)' : '');
+  // With a totals-block estimate the parts are one line; the detail lines say what they are.
+  const parts = estimate.details?.length ? estimate.details.join('; ') : of('part').map((i) => `${i.desc}${quality(i.partQuality)}`).join('; ');
+  const timed = (label: string, kind: 'labour' | 'paint', rate: number | null) =>
+    sum(kind) > 0 ? `${label}: ${hours(kind) > 0 ? `${hours(kind)} hours` : ''}${hours(kind) > 0 && rate != null ? ` at ${fmt(rate)} per hour` : ''}${hours(kind) > 0 ? ', ' : ''}${fmt(sum(kind))}` : '';
+  // The facts are worked out here, so the model only has to put them into sentences.
   const facts = [
-    sum('part') > 0 ? `All parts together: ${fmt(sum('part'))}` : '',
-    hoursOf('labour') > 0 ? `All labour together: ${round(hoursOf('labour'))} hours, ${fmt(sum('labour'))}` : '',
-    hoursOf('paint') > 0 ? `All paint labour together: ${round(hoursOf('paint'))} hours, ${fmt(sum('paint'))}` : '',
-    sum('deduction') > 0 ? `All deductions together: minus ${fmt(sum('deduction'))}` : '',
-    estimate.labourRate != null ? `Labour rate: ${fmt(estimate.labourRate)} per hour` : '',
-    estimate.paintRate != null ? `Paint labour rate: ${fmt(estimate.paintRate)} per hour` : '',
-    `Total of the lines: ${fmt(netOfItems(estimate))}`,
+    parts ? `Parts and work listed: ${parts}` : '',
+    sum('part') > 0 ? `Parts cost together: ${fmt(sum('part'))}` : '',
+    timed('Body and mechanical labour allowed', 'labour', estimate.labourRate),
+    timed('Paint labour allowed', 'paint', estimate.paintRate),
+    sum('material') > 0 ? `Paint materials: ${fmt(sum('material'))}` : '',
+    sum('other') > 0 ? `Other items (${names('other')}): ${fmt(sum('other'))}` : '',
+    sum('deduction') > 0 ? `Deducted by the insurer (${names('deduction')}): ${fmt(sum('deduction'))}` : 'Deducted by the insurer: nothing',
+    `Total of the estimate after deductions: ${fmt(netOfItems(estimate))}`,
   ].filter(Boolean);
   const language = lang === 'pl' ? 'Polish' : 'English';
-  return `Below are the lines of a car repair estimate written by an insurance company. Explain the estimate to the car owner in plain ${language}, in 4 to 6 short sentences.
-Say what is replaced, what is repaired and what is painted, how many hours of work are allowed and at what hourly rate, and what was deducted.
+  return `Explain a car repair estimate from an insurance company to the car owner in plain ${language}. Write one short sentence for each fact below, in the same order.
 Rules:
-- Use only the figures listed below and copy them exactly.
-- Do not calculate new figures.
+- Use only the figures in the facts and copy them exactly.
+- Do not calculate anything and do not combine two facts into a new figure.
+- A deduction is money the insurer took off the payout. Say so in plain words.
 - Do not give advice and do not judge whether the estimate is fair.
 - No headings and no lists.
 
-ESTIMATE:
-${lines.join('\n')}
+FACTS:
 ${facts.join('\n')}`;
 }
 
