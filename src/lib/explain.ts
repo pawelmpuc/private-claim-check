@@ -27,7 +27,7 @@ export function explainPrompt(estimate: Estimate, lang: Lang): string {
     sum('material') > 0 ? `Paint materials: ${fmt(sum('material'))}` : '',
     sum('other') > 0 ? `Other items (${names('other')}): ${fmt(sum('other'))}` : '',
     sum('deduction') > 0 ? `Amount the insurer took off, under the heading "${names('deduction')}": ${fmt(sum('deduction'))}` : 'Amount the insurer took off: nothing',
-    `Total of the estimate after deductions: ${fmt(netOfItems(estimate))}`,
+    `What the estimate comes to in the end, after the amounts taken off: ${fmt(netOfItems(estimate))}`,
   ].filter(Boolean);
   const language = lang === 'pl' ? 'Polish' : 'English';
   return `Explain a car repair estimate from an insurance company to the car owner in plain ${language}. Write one short sentence for each fact below, in the same order.

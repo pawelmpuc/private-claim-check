@@ -672,7 +672,7 @@ describe('plain-language explanation', () => {
   it('puts only the lines into the prompt', () => {
     expect(prompt).toContain('Body and mechanical labour allowed: 7.5 hours at PLN\u00a095.00 per hour, PLN\u00a0712.50');
     expect(prompt).toContain('Amount the insurer took off, under the heading "Amortyzacja części 30% / Parts depreciation 30%; Rabat na materiał lakierniczy 20% / Paint material discount 20%": PLN\u00a01,715.00');
-    expect(prompt).toContain('Total of the estimate after deductions: PLN\u00a05,437.50');
+    expect(prompt).toContain('What the estimate comes to in the end, after the amounts taken off: PLN\u00a05,437.50');
     expect(prompt).not.toMatch(/Jan|VIN|DW 12345/);
   });
 
