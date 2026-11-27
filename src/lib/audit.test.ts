@@ -479,6 +479,15 @@ describe('workshop quote', () => {
     expect(cmp.extra.map((i) => i.total)).toEqual([250, 220]);
   });
 
+  it('does not call a calibration left out when the estimate aims the headlamps', () => {
+    const line = (desc: string, kind: 'labour' | 'other', total: number) => ({ ...insurer.items[0], desc, kind, total, hours: null, rate: null });
+    const withAim = { ...insurer, items: [line('Aim headlamps', 'labour', 20)] };
+    const without = { ...insurer, items: [line('Replace headlamp', 'labour', 20)] };
+    const quote = { ...garage, items: [line('Headlamp calibration', 'other', 90)] };
+    expect(compareQuote(withAim, quote).extra).toHaveLength(0);
+    expect(compareQuote(without, quote).extra).toHaveLength(1);
+  });
+
   it('replaces the rate and deduction rules with the quote difference', () => {
     const settings = defaultSettings('PLN', 23);
     const findings = audit(insurer, settings, cmp);

@@ -40,7 +40,9 @@ function sumKind(estimate: Estimate, kind: GapKind) {
 /** The first five letters of every word of four letters or more, without diacritics. */
 function stems(text: string): Set<string> {
   const plain = text.toLowerCase().replace(/ł/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '');
-  return new Set((plain.match(/[a-z]{4,}/g) ?? []).map((w) => w.slice(0, 5)));
+  // Body shops write "aim headlamps" for what a workshop bills as a calibration.
+  const words = plain.replace(/\baim(ing)?\b/g, 'calibration');
+  return new Set((words.match(/[a-z]{4,}/g) ?? []).map((w) => w.slice(0, 5)));
 }
 
 /** Words that say where a part sits or what kind of line it is, not what the work is. */
