@@ -42,7 +42,7 @@ All inference goes through Firebase AI Logic (`src/lib/ai.ts`). The app does not
 
 The panel at the top of the page logs each request with the place it ran, taken from `response.inferenceSource`.
 
-Structured output is used on both paths: a JSON Schema as `responseConstraint` on the device, JSON mode in the cloud.
+The two paths ask for different output. The cloud model answers in JSON mode. The on-device model answers in a compact line format (`kind | quality | hours | amount | description`) that is streamed to the page while it is written. A line format needs about a third of the output tokens of JSON, which decides whether reading a page on a laptop takes seconds or minutes, and the user can watch the lines arrive and stop the run.
 
 ## Run it
 

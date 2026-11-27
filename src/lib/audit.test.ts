@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { audit, defaultSettings, netOfItems, tierTotals } from './audit';
-import { mergeEstimates, normalizeEstimate, parseModelJson, parseNumber } from './extract';
+import { mergeEstimates, normalizeEstimate, parseCompact, parseModelJson, parseNumber } from './extract';
 import { draftLetter, verifyRewrite } from './letter';
 import { redact } from './redact';
 import { sampleEstimate } from './sample';
@@ -94,6 +94,24 @@ describe('extract', () => {
       ],
     });
     expect(est.items.map((i) => i.desc)).toEqual(['Wymiana zderzaka', 'Utylizacja odpadów']);
+  });
+
+  it('parses the on-device line format', () => {
+    const est = parseCompact(`CURRENCY: PLN
+LABOUR_RATE: 95,00
+PAINT_RATE: -
+TOTAL: 5 437,50
+part | alt | - | 1240.00 | Zderzak przedni
+- labour | - | 3,4 | 323.00 | Wymiana zderzaka | i reflektora
+deduction | - | - | -1593.00 | Amortyzacja części 30%
+other | - | - | 5437.50 | RAZEM KOSZT NAPRAWY NETTO
+this line is noise`);
+    expect(est).toMatchObject({ currency: 'PLN', labourRate: 95, paintRate: null, statedTotal: 5437.5 });
+    expect(est.items.map((i) => [i.kind, i.partQuality, i.hours, i.total, i.desc])).toEqual([
+      ['part', 'alternative', null, 1240, 'Zderzak przedni'],
+      ['labour', 'unknown', 3.4, 323, 'Wymiana zderzaka | i reflektora'],
+      ['deduction', 'unknown', null, 1593, 'Amortyzacja części 30%'],
+    ]);
   });
 
   it('merges pages and keeps the last total', () => {

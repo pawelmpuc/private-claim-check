@@ -374,6 +374,18 @@ textarea {
   animation: spin 0.9s linear infinite;
 }
 
+.live {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  max-height: 220px;
+  overflow: auto;
+  background: #f3f2ed;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: 0.82rem/1.5 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

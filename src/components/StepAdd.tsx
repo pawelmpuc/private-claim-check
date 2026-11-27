@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { CloudNotAllowedError, firebaseConfigured, imagePart, NotConfiguredError, run } from '../lib/ai';
-import { emptyItem, ESTIMATE_JSON_SCHEMA, mergeEstimates, normalizeEstimate, parseModelJson, READ_PROMPT } from '../lib/extract';
+import { emptyItem, mergeEstimates, normalizeEstimate, parseCompact, parseModelJson, READ_PROMPT, READ_PROMPT_COMPACT } from '../lib/extract';
 import { filesToPages, MAX_PAGES, type PageImage } from '../lib/files';
 import { redact } from '../lib/redact';
 import { sampleEstimate } from '../lib/sample';
@@ -22,11 +22,29 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
   const [text, setText] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [live, setLive] = useState('');
+  const abort = useRef<AbortController | null>(null);
+
+  // The on-device model answers in a line format, the cloud model in JSON.
+  const toEstimate = (res: { text: string; source: string }) => (res.source === 'on_device' ? parseCompact(res.text) : normalizeEstimate(parseModelJson(res.text)));
 
   const fail = (err: unknown) => {
+    if (abort.current?.signal.aborted) return;
     if (err instanceof CloudNotAllowedError) setError(t('errCloudNotAllowed'));
     else if (err instanceof NotConfiguredError) setError(t('errNotConfigured'));
     else setError(t('errGeneric', { msg: err instanceof Error ? err.message : String(err) }));
+  };
+
+  const begin = () => {
+    setError(null);
+    setLive('');
+    abort.current = new AbortController();
+    return abort.current.signal;
+  };
+
+  const end = () => {
+    setBusy(null);
+    setLive('');
   };
 
   const finish = (estimate: Estimate) => {
@@ -45,47 +63,51 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
   };
 
   const readPages = async () => {
-    setError(null);
+    const signal = begin();
     try {
       const results: Estimate[] = [];
       for (let n = 0; n < pages.length; n += 1) {
         setBusy(t('reading', { a: n + 1, b: pages.length }));
-        const parts = [READ_PROMPT, imagePart(pages[n].base64, pages[n].mimeType)];
-        const res = await run({ deviceParts: parts, cloudParts: parts, allowCloud, jsonSchema: ESTIMATE_JSON_SCHEMA });
+        setLive('');
+        const image = imagePart(pages[n].base64, pages[n].mimeType);
+        const res = await run({ deviceParts: [READ_PROMPT_COMPACT, image], cloudParts: [READ_PROMPT, image], allowCloud, cloudJson: true, onText: setLive, signal });
         onLog({ step: 'read', source: res.source, redactions: 0, note: res.deviceError ? 'device_failed' : undefined });
-        results.push(normalizeEstimate(parseModelJson(res.text)));
+        results.push(toEstimate(res));
       }
       finish(mergeEstimates(results));
     } catch (err) {
       fail(err);
     } finally {
-      setBusy(null);
+      end();
     }
   };
 
   const readText = async () => {
-    setError(null);
+    const signal = begin();
     setBusy(t('readingText'));
     try {
       const safe = redact(text);
       const res = await run({
-        deviceParts: [`${READ_PROMPT}\n\nDOCUMENT:\n${text}`],
+        deviceParts: [`${READ_PROMPT_COMPACT}\n\nDOCUMENT:\n${text}`],
         cloudParts: [`${READ_PROMPT}\n\nDOCUMENT:\n${safe.text}`],
         allowCloud,
-        jsonSchema: ESTIMATE_JSON_SCHEMA,
+        cloudJson: true,
+        onText: setLive,
+        signal,
       });
       onLog({ step: 'read', source: res.source, redactions: res.source === 'in_cloud' ? safe.count : 0, note: res.deviceError ? 'device_failed' : undefined });
-      finish(normalizeEstimate(parseModelJson(res.text)));
+      finish(toEstimate(res));
     } catch (err) {
       fail(err);
     } finally {
-      setBusy(null);
+      end();
     }
   };
 
   const manual = () => onEstimate({ currency: 'EUR', labourRate: null, paintRate: null, statedTotal: null, items: [emptyItem()] });
 
   const reset = () => {
+    abort.current?.abort();
     setPages([]);
     setText('');
     setError(null);
@@ -141,10 +163,16 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
       </details>
 
       {busy && (
-        <p className="busy" role="status">
-          <span className="spinner" aria-hidden="true" />
-          {busy}
-        </p>
+        <div role="status">
+          <p className="busy">
+            <span className="spinner" aria-hidden="true" />
+            {busy}
+            <button type="button" className="btn btn-quiet" onClick={() => abort.current?.abort()}>
+              {t('stop')}
+            </button>
+          </p>
+          {live && <pre className="live">{live}</pre>}
+        </div>
       )}
       {error && (
         <p className="error" role="alert">

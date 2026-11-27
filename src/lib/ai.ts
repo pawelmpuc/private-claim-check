@@ -64,17 +64,14 @@ export async function deviceStatus(outputLang = 'en'): Promise<DeviceStatus> {
   }
 }
 
-function model(mode: InferenceMode, outputLang = 'en', jsonSchema?: object) {
+function model(mode: InferenceMode, outputLang = 'en', cloudJsonSchema?: object) {
   return getGenerativeModel(getAi(), {
     mode,
-    onDeviceParams: {
-      createOptions: deviceIo(outputLang),
-      promptOptions: jsonSchema ? { responseConstraint: jsonSchema } : undefined,
-    },
+    onDeviceParams: { createOptions: deviceIo(outputLang) },
     inCloudParams: {
       // Same model the SDK falls back to by default. JSON mode keeps the reply parseable.
       model: 'gemini-3.5-flash-lite',
-      generationConfig: jsonSchema ? { responseMimeType: 'application/json', temperature: 0 } : { temperature: 0.3 },
+      generationConfig: cloudJsonSchema ? { responseMimeType: 'application/json', temperature: 0 } : { temperature: 0.3 },
     },
   });
 }
@@ -90,9 +87,13 @@ export interface RunRequest {
   /** Sent when the request has to go to the cloud. Build it from redacted text. */
   cloudParts: Array<string | Part>;
   allowCloud: boolean;
-  jsonSchema?: object;
+  /** Ask the cloud model for JSON. The on-device prompt asks for its own format. */
+  cloudJson?: boolean;
   /** Language of the reply. Defaults to English. */
   outputLang?: string;
+  /** Called with the text so far while the on-device model writes. */
+  onText?: (text: string) => void;
+  signal?: AbortSignal;
 }
 
 export interface RunResult {
@@ -105,18 +106,25 @@ export interface RunResult {
 export async function run(req: RunRequest): Promise<RunResult> {
   let deviceError: string | undefined;
   const lang = req.outputLang ?? 'en';
+  const options = req.signal ? { signal: req.signal } : undefined;
   if ((await deviceStatus(lang)) === 'available') {
     try {
-      const result = await model(InferenceMode.ONLY_ON_DEVICE, lang, req.jsonSchema).generateContent(req.deviceParts);
-      return { text: result.response.text(), source: 'on_device' };
+      const result = await model(InferenceMode.ONLY_ON_DEVICE, lang).generateContentStream(req.deviceParts, options);
+      let text = '';
+      for await (const chunk of result.stream) {
+        text += chunk.text();
+        req.onText?.(text);
+      }
+      return { text, source: 'on_device' };
     } catch (err) {
+      if (req.signal?.aborted) throw err;
       deviceError = err instanceof Error ? err.message : String(err);
     }
   }
   if (!req.allowCloud) {
     throw new CloudNotAllowedError(deviceError ?? 'The on-device model is not available.');
   }
-  const result = await model(InferenceMode.ONLY_IN_CLOUD, lang, req.jsonSchema).generateContent(req.cloudParts);
+  const result = await model(InferenceMode.ONLY_IN_CLOUD, lang, req.cloudJson ? {} : undefined).generateContent(req.cloudParts, options);
   const reported = result.response.inferenceSource;
   return { text: result.response.text(), source: reported === 'on_device' ? 'on_device' : 'in_cloud', deviceError };
 }

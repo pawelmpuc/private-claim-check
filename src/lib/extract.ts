@@ -3,36 +3,7 @@ import type { Estimate, EstimateItem, ItemKind, PartQuality } from './types';
 const KINDS: ItemKind[] = ['part', 'labour', 'paint', 'material', 'deduction', 'other'];
 const QUALITIES: PartQuality[] = ['oem', 'alternative', 'used', 'unknown'];
 
-/** JSON Schema given to the on-device model as a response constraint. */
-export const ESTIMATE_JSON_SCHEMA = {
-  type: 'object',
-  properties: {
-    currency: { type: 'string' },
-    labourRate: { type: ['number', 'null'] },
-    paintRate: { type: ['number', 'null'] },
-    statedTotal: { type: ['number', 'null'] },
-    items: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          desc: { type: 'string' },
-          kind: { type: 'string', enum: KINDS },
-          qty: { type: ['number', 'null'] },
-          hours: { type: ['number', 'null'] },
-          unitPrice: { type: ['number', 'null'] },
-          total: { type: ['number', 'null'] },
-          partQuality: { type: 'string', enum: QUALITIES },
-        },
-        required: ['desc', 'kind', 'total', 'partQuality'],
-        additionalProperties: false,
-      },
-    },
-  },
-  required: ['currency', 'items'],
-  additionalProperties: false,
-} as const;
-
+/** Prompt for the cloud model, which answers in JSON mode. */
 export const READ_PROMPT = `You read a car repair cost estimate issued by an insurance company. The document can be in any language.
 Return JSON only.
 
@@ -143,4 +114,64 @@ export function mergeEstimates(pages: Estimate[]): Estimate {
     statedTotal: totals.length > 0 ? totals[totals.length - 1] : null,
     items: pages.flatMap((p) => p.items),
   };
+}
+
+/**
+ * Prompt for the on-device model. A line format needs about a third of the output
+ * tokens of JSON, which matters when the model runs on a laptop CPU, and it can be
+ * shown to the user while it streams.
+ */
+export const READ_PROMPT_COMPACT = `Read this car repair cost estimate from an insurance company. The document can be in any language.
+Reply with plain text only, in exactly this format.
+
+First four lines:
+CURRENCY: <ISO code such as PLN, EUR, GBP, USD>
+LABOUR_RATE: <hourly rate for body or mechanical work, or ->
+PAINT_RATE: <hourly rate for paint work, or ->
+TOTAL: <total repair cost before VAT, or ->
+
+Then one line for every priced line of the estimate:
+<kind> | <quality> | <hours> | <amount> | <description>
+
+kind: part, labour, paint, material, deduction or other. Use deduction for any line that lowers the payout: depreciation, wear, discount, rebate, "amortyzacja", "urealnienie", "rabat", "potrącenie".
+quality, for parts only: oem (codes O, OE, OEM), alt (codes Q, P, PJ, PC, Z, "zamiennik", aftermarket), used, or - if not stated.
+hours: labour time for labour and paint lines, otherwise -.
+amount: the line total as a positive number with a decimal point.
+description: the line text, copied in the original language.
+
+Example lines:
+part | oem | - | 350.00 | Door mirror, left
+labour | - | 1.5 | 180.00 | Replace door mirror
+
+Leave out section headings and total rows. Copy numbers exactly. Never invent a line. Write nothing else.`;
+
+const COMPACT_QUALITY: Record<string, PartQuality> = { oem: 'oem', alt: 'alternative', alternative: 'alternative', used: 'used' };
+
+/** Parses the line format asked for in READ_PROMPT_COMPACT. Lines it cannot read are skipped. */
+export function parseCompact(text: string): Estimate {
+  const raw: Record<string, unknown> = { items: [] as unknown[] };
+  const items = raw.items as unknown[];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.replace(/^[\s*`>-]+/, '').replace(/`+$/, '').trim();
+    if (!line) continue;
+    const head = line.match(/^(CURRENCY|LABOUR_RATE|PAINT_RATE|TOTAL)\s*:\s*(.*)$/i);
+    if (head) {
+      const key = { CURRENCY: 'currency', LABOUR_RATE: 'labourRate', PAINT_RATE: 'paintRate', TOTAL: 'statedTotal' }[head[1].toUpperCase()]!;
+      raw[key] = head[2].trim();
+      continue;
+    }
+    const cells = line.split('|').map((c) => c.trim());
+    if (cells.length < 5) continue;
+    const kind = cells[0].toLowerCase();
+    if (!KINDS.includes(kind as ItemKind)) continue;
+    items.push({
+      kind,
+      partQuality: COMPACT_QUALITY[cells[1].toLowerCase()] ?? 'unknown',
+      hours: cells[2],
+      total: cells[3],
+      // A description may itself contain the separator.
+      desc: cells.slice(4).join(' | '),
+    });
+  }
+  return normalizeEstimate(raw);
 }
