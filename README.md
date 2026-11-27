@@ -76,7 +76,7 @@ On-device inference needs a recent Chrome on a desktop that meets Chrome's hardw
 
 Older Chrome versions need `chrome://flags/#prompt-api-for-gemini-nano-multimodal-input` set to **Enabled**.
 
-In other browsers the app works through the cloud path, once the user allows it.
+In other browsers the app works through the cloud path, once the user allows it. To see that path on a machine that has the on-device model, add `?nodevice` to the address.
 
 ## Tests
 

@@ -58,7 +58,14 @@ interface LanguageModelGlobal {
 }
 
 /** Asks Chrome whether the built-in model can run here. No data leaves the device. */
+/**
+ * `?nodevice` in the address makes the app behave like a browser without the on-device model.
+ * It exists to test and show the cloud path on a machine that has the model.
+ */
+const FORCE_NO_DEVICE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('nodevice');
+
 export async function deviceStatus(outputLang = 'en'): Promise<DeviceStatus> {
+  if (FORCE_NO_DEVICE) return 'unavailable';
   const lm = (globalThis as unknown as { LanguageModel?: LanguageModelGlobal }).LanguageModel;
   if (!lm?.availability) return 'unavailable';
   try {
