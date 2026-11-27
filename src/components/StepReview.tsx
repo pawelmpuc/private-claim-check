@@ -28,7 +28,7 @@ export function StepReview({ estimate, onChange, onCurrency, country, onCountry,
   return (
     <section className="card" aria-labelledby="step2">
       <h2 id="step2">{t('step2')}</h2>
-      <p className="notice">{t('reviewHint')}</p>
+      <p className={rawFromPdf ? 'notice notice-ok' : 'notice'}>{t(rawFromPdf ? 'reviewHintPdf' : 'reviewHint')}</p>
 
       {rawRead && (
         <details className="raw">

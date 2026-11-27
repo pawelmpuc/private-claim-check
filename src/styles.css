@@ -823,3 +823,8 @@ textarea {
   align-self: center;
   font-weight: 600;
 }
+
+.notice-ok {
+  background: color-mix(in srgb, var(--device) 9%, white);
+  border-color: color-mix(in srgb, var(--device) 40%, white);
+}

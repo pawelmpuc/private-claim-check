@@ -59,6 +59,7 @@ const en = {
   errDeviceTimeout: 'The on-device model did not start within {s} seconds. Restart Chrome and try again, switch the cloud on above, or type the lines in yourself.',
   errNoLines: 'No estimate lines were found. Try a sharper photo, or type the lines in yourself.',
 
+  reviewHintPdf: 'Read straight from the text of the PDF. No AI was used, so the figures are the ones printed in the document. Check that the lines are sorted into the right types.',
   reviewHint: 'AI can misread a document. Compare these lines with your estimate and correct anything that is wrong before you rely on the result.',
   rawRead: 'Show what the on-device model wrote',
   sumMismatch: 'The lines below add up to {lines}, but the document prints a total of {stated}. A line was probably missed or misread. Compare the lines with the document.',
@@ -249,6 +250,7 @@ const pl: Record<Key, string> = {
   errDeviceTimeout: 'Model na urządzeniu nie wystartował w ciągu {s} sekund. Uruchom Chrome ponownie i spróbuj jeszcze raz, włącz chmurę powyżej albo wpisz pozycje ręcznie.',
   errNoLines: 'Nie znaleziono pozycji kosztorysu. Spróbuj z ostrzejszym zdjęciem albo wpisz pozycje ręcznie.',
 
+  reviewHintPdf: 'Odczytano wprost z tekstu pliku PDF. AI nie było użyte, więc kwoty są takie, jak w dokumencie. Sprawdź, czy pozycje trafiły do właściwych rodzajów.',
   reviewHint: 'AI może źle odczytać dokument. Porównaj te pozycje ze swoim kosztorysem i popraw błędy, zanim oprzesz się na wyniku.',
   rawRead: 'Pokaż, co zapisał model na urządzeniu',
   sumMismatch: 'Pozycje poniżej sumują się do {lines}, a na dokumencie widnieje suma {stated}. Któraś pozycja została pewnie pominięta albo źle odczytana. Porównaj pozycje z dokumentem.',
