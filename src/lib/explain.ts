@@ -26,7 +26,7 @@ export function explainPrompt(estimate: Estimate, lang: Lang): string {
     timed('Paint labour allowed', 'paint', estimate.paintRate),
     sum('material') > 0 ? `Paint materials: ${fmt(sum('material'))}` : '',
     sum('other') > 0 ? `Other items (${names('other')}): ${fmt(sum('other'))}` : '',
-    sum('deduction') > 0 ? `Deducted by the insurer (${names('deduction')}): ${fmt(sum('deduction'))}` : 'Deducted by the insurer: nothing',
+    sum('deduction') > 0 ? `Amount the insurer took off, under the heading "${names('deduction')}": ${fmt(sum('deduction'))}` : 'Amount the insurer took off: nothing',
     `Total of the estimate after deductions: ${fmt(netOfItems(estimate))}`,
   ].filter(Boolean);
   const language = lang === 'pl' ? 'Polish' : 'English';
@@ -34,7 +34,7 @@ export function explainPrompt(estimate: Estimate, lang: Lang): string {
 Rules:
 - Use only the figures in the facts and copy them exactly.
 - Do not calculate anything and do not combine two facts into a new figure.
-- A deduction is money the insurer took off the payout. Say so in plain words.
+- An amount taken off is money the insurer cut from the payout. Its heading is the insurer's name for the cut, not the name of a company.
 - Do not give advice and do not judge whether the estimate is fair.
 - No headings and no lists.
 

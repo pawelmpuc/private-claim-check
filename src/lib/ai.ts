@@ -1,6 +1,7 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode, type AI, type Part } from 'firebase/ai';
+import { fetchAndActivate, getNumber, getRemoteConfig, getString } from 'firebase/remote-config';
 import type { InferenceSource } from './types';
 
 /**
@@ -17,8 +18,32 @@ export class NotConfiguredError extends Error {}
 export class CloudNotAllowedError extends Error {}
 export class DeviceTimeoutError extends Error {}
 
-/** How long the on-device model may take to produce its first text before the app gives up on it. */
-export const DEVICE_START_TIMEOUT_S = 90;
+/**
+ * Two settings can be changed from Firebase Remote Config without a new release:
+ * the cloud model (model names are retired over time) and how long the on-device
+ * model may take to produce its first text before the app gives up on it.
+ * The values below are used until Remote Config answers, and whenever it does not.
+ */
+export const tuning = { cloudModel: 'gemini-3.5-flash-lite', deviceTimeoutS: 90 };
+
+/** Remote values are checked before use, so a typo in the console cannot break the app. */
+export function applyRemote(cloudModel: string, deviceTimeoutS: number): void {
+  if (/^gemini-[a-z0-9.-]{3,40}$/.test(cloudModel)) tuning.cloudModel = cloudModel;
+  if (Number.isFinite(deviceTimeoutS) && deviceTimeoutS >= 30 && deviceTimeoutS <= 300) tuning.deviceTimeoutS = Math.round(deviceTimeoutS);
+}
+
+function loadRemoteConfig(app: FirebaseApp): void {
+  try {
+    const rc = getRemoteConfig(app);
+    rc.settings.minimumFetchIntervalMillis = 60 * 60 * 1000;
+    rc.defaultConfig = { cloud_model: tuning.cloudModel, device_timeout_s: tuning.deviceTimeoutS };
+    void fetchAndActivate(rc)
+      .then(() => applyRemote(getString(rc, 'cloud_model'), getNumber(rc, 'device_timeout_s')))
+      .catch(() => undefined);
+  } catch {
+    // Remote Config needs IndexedDB. Without it the defaults stay in force.
+  }
+}
 
 const env = import.meta.env;
 
@@ -44,6 +69,7 @@ function getAi(): AI {
     initializeAppCheck(app, { provider: new ReCaptchaV3Provider(env.VITE_RECAPTCHA_V3_KEY), isTokenAutoRefreshEnabled: true });
   }
   ai = getAI(app, { backend: new GoogleAIBackend() });
+  loadRemoteConfig(app);
   return ai;
 }
 
@@ -80,8 +106,8 @@ function model(mode: InferenceMode, outputLang = 'en', cloudJsonSchema?: object)
     mode,
     onDeviceParams: { createOptions: deviceIo(outputLang) },
     inCloudParams: {
-      // Same model the SDK falls back to by default. JSON mode keeps the reply parseable.
-      model: 'gemini-3.5-flash-lite',
+      // JSON mode keeps the reply parseable.
+      model: tuning.cloudModel,
       generationConfig: cloudJsonSchema ? { responseMimeType: 'application/json', temperature: 0 } : { temperature: 0.3 },
     },
   });
@@ -133,8 +159,8 @@ export async function run(req: RunRequest): Promise<RunResult> {
       timer = setTimeout(() => {
         deviceTimedOut = true;
         attempt.abort();
-        reject(new DeviceTimeoutError(`No answer from the on-device model after ${DEVICE_START_TIMEOUT_S} seconds.`));
-      }, DEVICE_START_TIMEOUT_S * 1000);
+        reject(new DeviceTimeoutError(`No answer from the on-device model after ${tuning.deviceTimeoutS} seconds.`));
+      }, tuning.deviceTimeoutS * 1000);
     });
     const stream = (async () => {
       const result = await model(InferenceMode.ONLY_ON_DEVICE, lang).generateContentStream(req.deviceParts, { signal: attempt.signal });

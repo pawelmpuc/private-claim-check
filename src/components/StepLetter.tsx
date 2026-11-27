@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, DeviceTimeoutError, firebaseConfigured, NotConfiguredError, run } from '../lib/ai';
+import { CloudNotAllowedError, DeviceTimeoutError, firebaseConfigured, NotConfiguredError, run, tuning } from '../lib/ai';
 import { TIERS, tierTotals } from '../lib/audit';
 import type { Comparison } from '../lib/compare';
 import type { Key } from '../lib/i18n';
@@ -55,6 +55,11 @@ export function StepLetter({ estimate, findings, selected, comparison, tier, onT
       const safe = redact(prompt);
       const res = await run({ deviceParts: [prompt], cloudParts: [safe.text], allowCloud, outputLang: letterLang, onText: setLive });
       onLog({ step: 'letter', source: res.source, redactions: res.source === 'in_cloud' ? safe.count : 0, note: res.deviceError ? 'device_failed' : undefined });
+      if (!res.text.trim()) {
+        setRewrite(null);
+        setMessage({ kind: 'error', text: t('polishEmpty') });
+        return;
+      }
       const result = applyPolish(parts, res.text);
       if (result.ok && !result.changed) {
         setRewrite(null);
@@ -68,7 +73,7 @@ export function StepLetter({ estimate, findings, selected, comparison, tier, onT
         setMessage({ kind: 'error', text: t(`polishRejected_${result.reason}` as Key, { value: result.value ?? '' }) });
       }
     } catch (err) {
-      if (err instanceof DeviceTimeoutError) setMessage({ kind: 'error', text: t('errDeviceTimeout', { s: DEVICE_START_TIMEOUT_S }) });
+      if (err instanceof DeviceTimeoutError) setMessage({ kind: 'error', text: t('errDeviceTimeout', { s: tuning.deviceTimeoutS }) });
       else if (err instanceof CloudNotAllowedError) setMessage({ kind: 'error', text: t('errCloudNotAllowed') });
       else if (err instanceof NotConfiguredError) setMessage({ kind: 'error', text: t('errNotConfigured') });
       else setMessage({ kind: 'error', text: t('errGeneric', { msg: err instanceof Error ? err.message : String(err) }) });

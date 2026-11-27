@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, DeviceTimeoutError, firebaseConfigured, NotConfiguredError, run } from '../lib/ai';
+import { CloudNotAllowedError, DeviceTimeoutError, firebaseConfigured, NotConfiguredError, run, tuning } from '../lib/ai';
 import { explainPrompt, inventedFigure } from '../lib/explain';
 import type { Estimate, InferenceLogEntry } from '../lib/types';
 import { useT } from '../lib/useT';
@@ -38,7 +38,7 @@ export function Explain({ estimate, allowCloud, onLog }: Props) {
       if (invented) setError(t('explainRejected', { value: invented }));
       else setResult({ text, where: t(res.source === 'on_device' ? 'srcDevice' : 'srcCloud') });
     } catch (err) {
-      if (err instanceof DeviceTimeoutError) setError(t('errDeviceTimeout', { s: DEVICE_START_TIMEOUT_S }));
+      if (err instanceof DeviceTimeoutError) setError(t('errDeviceTimeout', { s: tuning.deviceTimeoutS }));
       else if (err instanceof CloudNotAllowedError) setError(t('errCloudNotAllowed'));
       else if (err instanceof NotConfiguredError) setError(t('errNotConfigured'));
       else setError(t('errGeneric', { msg: err instanceof Error ? err.message : String(err) }));

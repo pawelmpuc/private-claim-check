@@ -195,6 +195,7 @@ Rules:
 - Do not add facts, amounts, dates, laws or threats.
 - Do not add a greeting, a signature or a list.
 - Do not leave blanks to fill in, and do not mention a claim number or a sum of money.
+- A numbered list of points follows the first paragraph, so its last sentence must lead into that list.
 Return the first paragraph, then a line with only three dashes (---), then the second paragraph. Nothing else.`,
   pl: `Przeredaguj dwa poniższe akapity. Otwierają i zamykają pismo osoby prywatnej do zakładu ubezpieczeń w sprawie kosztorysu naprawy. {TONE} Pisz po polsku.
 Zasady:
@@ -203,6 +204,7 @@ Zasady:
 - Nie dodawaj faktów, kwot, dat, przepisów ani gróźb.
 - Nie dodawaj powitania, podpisu ani wyliczeń.
 - Nie zostawiaj pustych miejsc do uzupełnienia i nie wspominaj o numerze szkody ani o kwocie.
+- Po pierwszym akapicie następuje numerowana lista punktów, więc jego ostatnie zdanie ma do niej prowadzić.
 Zwróć pierwszy akapit, potem linię zawierającą tylko trzy myślniki (---), potem drugi akapit. Nic więcej.`,
 };
 
