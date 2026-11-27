@@ -74,7 +74,9 @@ A row is treated as a deduction only on evidence in the row itself: a negative a
 
 `android/` holds a native Android app (Kotlin, Android 8 and newer). It shows the same interface, packed into the APK, and gives it one door to a model: a small bridge (`AiBridge.kt`) to the **Firebase AI Logic Android SDK**. The routing rules above do not change. The page still decides where a request may run; the bridge calls the SDK with `InferenceMode.ONLY_ON_DEVICE` (Gemini Nano through AICore, on phones that have it) or `InferenceMode.ONLY_IN_CLOUD`, streams the answer back and reports `inferenceSource`. Consent, redaction and the figure checks are the same code as on the web.
 
-App Check protects the AI endpoint on Android too. This build uses the App Check debug provider, which the hackathon rules accept; a store release would use Play Integrity. No APK is published in this repository: build it as shown below.
+**Download:** [private-claim-check-android.apk](https://github.com/pawelmpuc/private-claim-check/releases/download/android-v1.0/private-claim-check-android.apk) (Android 8 or newer). Open it, tick "Allow cloud when on-device AI is not available" and press "Try with a sample estimate".
+
+App Check protects the AI endpoint on Android too. The download uses the App Check debug provider with a token built in, which the hackathon rules accept, so it reaches the cloud model on any phone. The token will be withdrawn after the judging; a store release would use Play Integrity.
 
 What has been checked on Android, and what has not:
 
