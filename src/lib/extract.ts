@@ -217,7 +217,17 @@ function splitLongLine(line: string): string[] {
   });
 }
 
-function parseRows(text: string, state: { section: ItemKind | null; total: number | null; currency: string | null }): Row[] {
+const OTHER_WORDS = /calibrat|kalibrac|alignment|geometri|diagnos|scan|towing|storage|disposal|utyliz|holowan/;
+
+interface ParseState {
+  section: ItemKind | null;
+  /** False when the section heading was read in an earlier tile and may no longer apply. */
+  fresh: boolean;
+  total: number | null;
+  currency: string | null;
+}
+
+function parseRows(text: string, state: ParseState): Row[] {
   const rows: Row[] = [];
   const currency = text.match(/\b(PLN|EUR|GBP|USD|CHF|CZK)\b|z[lł]\b|€|£|\$/i)?.[0];
   if (currency && !state.currency) {
@@ -235,9 +245,15 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
       const cur = line.match(/^CURRENCY\s*:\s*([A-Za-z]{3})\b/i);
       if (cur) state.currency = cur[1].toUpperCase();
       const heading = sectionOf(cells[0]);
-      if (heading) state.section = heading;
+      if (heading) {
+        state.section = heading;
+        state.fresh = true;
+      }
       // A short heading in capitals that names no known section still ends the previous one.
-      else if (cells.length === 1 && cells[0].split(/\s+/).length <= 3 && cells[0] === cells[0].toUpperCase() && /\p{Lu}{3}/u.test(cells[0])) state.section = null;
+      else if (cells.length === 1 && cells[0].split(/\s+/).length <= 3 && cells[0] === cells[0].toUpperCase() && /\p{Lu}{3}/u.test(cells[0])) {
+        state.section = null;
+        state.fresh = true;
+      }
       continue;
     }
     // A leading row number such as "3 | Błotnik | ...".
@@ -246,9 +262,13 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
       const lead = sectionOf(cells[0]);
       if (lead) {
         state.section = lead;
+        state.fresh = true;
         cells = cells.slice(1);
       }
     }
+    // "5 Replace bumper and headlamp | 4.0 | ...": the row number written into the description.
+    const merged = cells[0].match(/^(\d{1,3})[.)]?\s+(\p{L}.*)$/u);
+    if (merged && cells.length >= 2) cells = [merged[1], merged[2], ...cells.slice(1)];
     let rowNo: string | null = null;
     if (cells.length > 2 && /^\d{1,3}\.?$/.test(cells[0]) && !NUMERIC_CELL.test(cells[1])) {
       rowNo = cells[0].replace('.', '');
@@ -258,10 +278,12 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
     const texts = cells.filter((c) => !NUMERIC_CELL.test(c) && !PERCENT_CELL.test(c) && qualityOf(c) == null);
     // Some transcriptions put the section name in front of a row, or in place of its description.
     let rowSection: ItemKind | null = null;
-    if (texts.length > 0 && texts[0].split(/\s+/).length <= 2) {
+    // A lone cell such as "Paint materials" is the description of the row, not a section name.
+    if (texts.length > 0 && texts[0].split(/\s+/).length <= 2 && (texts.length > 1 || texts[0].split(/\s+/).length === 1)) {
       rowSection = sectionOf(texts[0]);
       if (rowSection) {
         state.section = rowSection;
+        state.fresh = true;
         if (texts.length > 1) texts.shift();
       }
     }
@@ -283,13 +305,14 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
     const quality = cells.map(qualityOf).find((q) => q != null) ?? null;
     const section = rowSection ?? state.section;
     let kind: ItemKind;
+    // What the row itself says. A heading read in an earlier tile is only a fallback,
+    // because the model sometimes leaves the headings of the next tile out.
+    const byWords: ItemKind | null = quality ? 'part' : /^(lakier|paint|refinish)/.test(key) ? 'paint' : OTHER_WORDS.test(key) ? 'other' : LABOUR_WORDS.test(key) ? 'labour' : null;
     if (negative || DEDUCTION_WORDS.test(key)) kind = 'deduction';
     else if (/material/.test(key)) kind = 'material';
+    else if (!state.fresh && rowSection == null && byWords) kind = byWords;
     else if (section && section !== 'deduction') kind = section;
-    else if (quality) kind = 'part';
-    else if (/lakier|paint/.test(key)) kind = 'paint';
-    else if (LABOUR_WORDS.test(key)) kind = 'labour';
-    else kind = 'other';
+    else kind = byWords ?? (/lakier|paint/.test(key) ? 'paint' : 'other');
 
     let hours: number | null = null;
     let rate: number | null = null;
@@ -342,10 +365,11 @@ function commonest(values: number[]): number | null {
  * overlapping tiles, so rows repeated at a seam are dropped.
  */
 export function parseTranscription(tiles: string[], fallbackCurrency = 'EUR'): Estimate {
-  const state = { section: null as ItemKind | null, total: null as number | null, currency: null as string | null };
+  const state: ParseState = { section: null, fresh: false, total: null, currency: null };
   const rows: Row[] = [];
   const seen = new Set<string>();
   for (const tile of tiles) {
+    state.fresh = false;
     // A numbered row that was already read is a repeat: from the overlap of two tiles,
     // or from the model writing the same row twice.
     const next = parseRows(tile, state).filter((r) => {

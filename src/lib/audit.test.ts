@@ -359,6 +359,43 @@ TOTAL NET | 3,078.00`,
     expect(netOfItems(est)).toBe(3078);
   });
 
+  it('classifies rows by their own words when the second tile came back without headings', () => {
+    // Real output for the scan of the sample quote.
+    const est = parseTranscription([
+      `Parts
+Front bumper cover | OEM | 1 | 465.00 | 465.00
+Left LED headlamp | OEM | 1 | 720.00 | 720.00
+Left fender | OEM | 1 | 285.00 | 285.00
+Left lower control arm | OEM | 1 | 160.00 | 160.00
+
+Labor
+Total USD | 2130.00`,
+      `3 Left fender | OEM | 1 | 285.00
+4 Left lower control arm | OEM | 1 | 160.00
+5 Replace bumper and headlamp | 4.0 | 72.00 | 288.00
+6 Replace fender and control arm | 5.0 | 72.00 | 360.00
+7 Paint bumper and fender | 6.0 | 75.00 | 450.00
+8 Paint materials | 1 | 195.00 | 195.00
+9 Headlamp calibration | 1 | 90.00 | 90.00
+10 Wheel alignment | 1 | 65.00 | 65.00
+TOTAL NET |  |  | 3,078.00`,
+    ]);
+    expect(est.items.map((i) => [i.desc, i.kind, i.hours, i.total])).toEqual([
+      ['Front bumper cover', 'part', null, 465],
+      ['Left LED headlamp', 'part', null, 720],
+      ['Left fender', 'part', null, 285],
+      ['Left lower control arm', 'part', null, 160],
+      ['Replace bumper and headlamp', 'labour', 4, 288],
+      ['Replace fender and control arm', 'labour', 5, 360],
+      ['Paint bumper and fender', 'paint', 6, 450],
+      ['Paint materials', 'material', null, 195],
+      ['Headlamp calibration', 'other', null, 90],
+      ['Wheel alignment', 'other', null, 65],
+    ]);
+    expect(est).toMatchObject({ currency: 'USD', labourRate: 72, paintRate: 75, statedTotal: 3078 });
+    expect(netOfItems(est)).toBe(3078);
+  });
+
   it('marks a doubtful amount when there is no total to settle it', () => {
     const est = parseTranscription(['Potrącenia | Amortyzacja części 30% | -1 | 593,00 | -593,00']);
     expect(est.items[0]).toMatchObject({ kind: 'deduction', total: 593, check: true });
