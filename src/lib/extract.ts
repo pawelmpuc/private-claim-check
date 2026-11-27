@@ -122,7 +122,7 @@ export function mergeEstimates(pages: Estimate[]): Estimate {
  * parts, labour and deductions is done by parseTranscription below.
  */
 export const TRANSCRIBE_PROMPT =
-  'Transcribe the table in this image of a car repair cost estimate. Write one line per table row, with the cells separated by " | ", exactly as printed and in the original language. Write section headings on their own line. Include the total row. Copy every number exactly. Do not translate. Do not explain. Before the table, write one line with the currency of the document as an ISO code, like this: CURRENCY: USD';
+  'Transcribe the table in this image of a car repair cost estimate. Write one line per table row, with the cells separated by " | ", exactly as printed and in the original language. Write section headings on their own line. Include the total row. Copy every number exactly. Do not translate. Do not explain.';
 
 export const TRANSCRIBE_TEXT_PROMPT =
   'Below is the text of a car repair cost estimate. Rewrite its priced lines as a table: one line per row, with the cells separated by " | ", in the original language. Keep section headings on their own line. Include the total row. Copy every number exactly. Do not translate. Do not explain.';
@@ -145,6 +145,18 @@ const SECTIONS: Array<[ItemKind, RegExp]> = [
 const DEDUCTION_WORDS = /amortyz|urealn|rabat|potrac|upust|discount|deprecia|betterment|rebate|abzug|deduct/;
 const LABOUR_WORDS = /wymian|napraw|demont|montaz|replace|repair|remove|refit|ausbau|einbau|ersetzen/;
 const QUALITY_CODE = /^(oem|oe|o|q|pj|pc|pt|p|zj|z)$/i;
+const QUALITY_WORDS: Array<[PartQuality, RegExp]> = [
+  ['used', /^(used|recycled|second[- ]?hand|green( part)?|u[zż]ywan[aey]?|gebraucht)$/i],
+  ['alternative', /^(non[- ]?oem|non[- ]?genuine|aftermarket|pattern( part)?|alternative|equivalent|zamiennik|nachbau)$/i],
+  ['oem', /^(original|genuine|oryginaln[aey]?|oryginal|original(teil)?)$/i],
+];
+/** Part quality named by a whole cell, as a code ("Q") or a word ("Non-OEM"). */
+function qualityOf(cell: string): PartQuality | null {
+  const c = cell.trim();
+  if (QUALITY_CODE.test(c)) return /^(o|oe|oem)$/i.test(c) ? 'oem' : 'alternative';
+  for (const [quality, re] of QUALITY_WORDS) if (re.test(c)) return quality;
+  return null;
+}
 const NUMERIC_CELL = /^[-\u2212+]?\s*\d[\d\s\u00a0.,]*\s*(z[lł]|pln|eur|gbp|usd|€|£|\$)?$/i;
 const PERCENT_CELL = /^[-\u2212+]?\s*\d[\d.,]*\s*%$/;
 
@@ -190,7 +202,7 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
     // A leading row number such as "3 | Błotnik | ...".
     if (cells.length > 2 && /^\d{1,3}\.?$/.test(cells[0]) && !numericAt[1]) cells = cells.slice(1);
 
-    const texts = cells.filter((c) => !NUMERIC_CELL.test(c) && !PERCENT_CELL.test(c) && !QUALITY_CODE.test(c));
+    const texts = cells.filter((c) => !NUMERIC_CELL.test(c) && !PERCENT_CELL.test(c) && qualityOf(c) == null);
     // Some transcriptions put the section name in front of a row, or in place of its description.
     let rowSection: ItemKind | null = null;
     if (texts.length > 0 && texts[0].split(/\s+/).length <= 2) {
@@ -215,13 +227,13 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
     }
 
     const key = letters(desc);
-    const code = cells.find((c) => QUALITY_CODE.test(c));
+    const quality = cells.map(qualityOf).find((q) => q != null) ?? null;
     const section = rowSection ?? state.section;
     let kind: ItemKind;
     if (negative || DEDUCTION_WORDS.test(key)) kind = 'deduction';
     else if (/material/.test(key)) kind = 'material';
     else if (section && section !== 'deduction') kind = section;
-    else if (code) kind = 'part';
+    else if (quality) kind = 'part';
     else if (/lakier|paint/.test(key)) kind = 'paint';
     else if (LABOUR_WORDS.test(key)) kind = 'labour';
     else kind = 'other';
@@ -243,11 +255,7 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
       }
     }
 
-    let partQuality: PartQuality = 'unknown';
-    if (kind === 'part' && code) {
-      const c = code.toLowerCase();
-      partQuality = c === 'o' || c === 'oe' || c === 'oem' ? 'oem' : 'alternative';
-    }
+    const partQuality: PartQuality = kind === 'part' && quality ? quality : 'unknown';
 
     let alt: number | null = null;
     const lead = numbers.findIndex((c) => /^[-\u2212]\s*[1-9]$/.test(c));

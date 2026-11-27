@@ -225,6 +225,31 @@ Razem koszt naprawy netto | | | | 5 437,50`,
     expect(netOfItems(est)).toBe(5437.5);
   });
 
+  it('reads part quality written as words and a total with comma thousands', () => {
+    const est = parseTranscription([
+      `No. | Description | Part type | Qty / hours | Unit price | Net GBP
+PARTS
+1 | Front bumper | Non-OEM | 1 | 310.00 | 310.00
+2 | Left LED headlamp | OEM | 1 | 720.00 | 720.00
+3 | Left front wing | Used | 1 | 190.00 | 190.00
+LABOUR
+4 | Replace bumper and headlamp | 3.4 | 38.00 | 129.20
+DEDUCTIONS
+5 | Betterment on parts 30% | -366.00
+TOTAL REPAIR COST NET | 983.20`,
+    ]);
+    expect(est.currency).toBe('GBP');
+    expect(est.statedTotal).toBe(983.2);
+    expect(est.items.map((i) => [i.desc, i.kind, i.partQuality, i.total])).toEqual([
+      ['Front bumper', 'part', 'alternative', 310],
+      ['Left LED headlamp', 'part', 'oem', 720],
+      ['Left front wing', 'part', 'used', 190],
+      ['Replace bumper and headlamp', 'labour', 'unknown', 129.2],
+      ['Betterment on parts 30%', 'deduction', 'unknown', 366],
+    ]);
+    expect(est.labourRate).toBe(38);
+  });
+
   it('marks a doubtful amount when there is no total to settle it', () => {
     const est = parseTranscription(['Potrącenia | Amortyzacja części 30% | -1 | 593,00 | -593,00']);
     expect(est.items[0]).toMatchObject({ kind: 'deduction', total: 593, check: true });

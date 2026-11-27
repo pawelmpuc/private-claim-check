@@ -100,6 +100,8 @@ export function StepAdd({ allowCloud, hasEstimate, fallbackCurrency, onEstimate,
         const estimate = await readOne(
           async () => {
             const tiles = await tilesOf(page);
+            // ?debug keeps the tiles on window so prompts can be tried against the same images.
+            if (new URLSearchParams(location.search).has('debug')) (window as unknown as { pccTiles: PageImage[] }).pccTiles = tiles;
             const texts: string[] = [];
             for (let k = 0; k < tiles.length; k += 1) {
               setBusy(t('readingTile', { a: n + 1, b: pages.length, k: k + 1, n: tiles.length }));
