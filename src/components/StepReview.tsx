@@ -1,6 +1,7 @@
 import { COUNTRIES } from '../lib/countries';
-import type { AuditSettings, Estimate } from '../lib/types';
+import type { AuditSettings, Estimate, InferenceLogEntry } from '../lib/types';
 import { useT } from '../lib/useT';
+import { Explain } from './Explain';
 import { LinesTable, NumberField } from './LinesTable';
 
 interface Props {
@@ -14,11 +15,13 @@ interface Props {
   /** What the on-device model wrote, shown so the user can see where a line came from. */
   rawRead: string | null;
   rawFromPdf?: boolean;
+  allowCloud: boolean;
+  onLog: (entry: Omit<InferenceLogEntry, 'at'>) => void;
 }
 
 const CURRENCIES = ['PLN', 'EUR', 'GBP', 'USD', 'CHF', 'CZK', 'SEK', 'NOK', 'DKK', 'CAD', 'AUD'];
 
-export function StepReview({ estimate, onChange, onCurrency, country, onCountry, settings, onSettings, rawRead, rawFromPdf }: Props) {
+export function StepReview({ estimate, onChange, onCurrency, country, onCountry, settings, onSettings, rawRead, rawFromPdf, allowCloud, onLog }: Props) {
   const { t, lang } = useT();
   const currencies = CURRENCIES.includes(estimate.currency) ? CURRENCIES : [estimate.currency, ...CURRENCIES];
 
@@ -59,6 +62,8 @@ export function StepReview({ estimate, onChange, onCurrency, country, onCountry,
       </div>
 
       <LinesTable estimate={estimate} onChange={onChange} label={t('step2')} />
+
+      <Explain estimate={estimate} allowCloud={allowCloud} onLog={onLog} />
 
       <h3>{t('refRatesTitle')}</h3>
       <p className="help">{t('refRatesHelp')}</p>

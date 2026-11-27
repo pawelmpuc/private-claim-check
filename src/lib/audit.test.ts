@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { audit, defaultSettings, netOfItems, sumMismatch, tierTotals } from './audit';
 import { mergeEstimates, normalizeEstimate, parseDocumentText, parseModelJson, parseNumber, parsePastedText, parseTranscription } from './extract';
 import { hasTextLayer, layoutLines } from './pdftext';
+import { explainPrompt, inventedFigure } from './explain';
 import { draftLetter, verifyRewrite } from './letter';
 import { redact } from './redact';
 import { countryForCurrency } from './countries';
@@ -624,6 +625,22 @@ TOTAL REPAIR COST NET | 589.20`]);
     const lines = layoutLines([run('Body Labor', 40, 500), run('5.7 hrs', 200, 500), run('@', 250, 500.4), run('$ 52.00 /hr', 290, 500), run('296.40', 400, 500), run('ESTIMATE', 40, 520), run('TOTALS', 78, 520), run('Parts', 40, 510), run('2,166.78', 392, 510)]);
     expect(lines).toEqual(['ESTIMATE TOTALS', 'Parts | 2,166.78', 'Body Labor | 5.7 hrs | @ | $ 52.00 /hr | 296.40']);
     expect(hasTextLayer(lines)).toBe(false);
+  });
+});
+
+describe('plain-language explanation', () => {
+  const estimate = sampleEstimate();
+  const prompt = explainPrompt(estimate, 'en');
+
+  it('puts only the lines into the prompt', () => {
+    expect(prompt).toContain('Wymiana zderzaka i reflektora / Replace bumper and headlamp (labour, 3.4 hours): PLN\u00a0323.00');
+    expect(prompt).toContain('minus PLN\u00a01,593.00');
+    expect(prompt).toContain('Labour rate: PLN\u00a095.00 per hour');
+  });
+
+  it('accepts figures from the estimate and catches an invented one', () => {
+    expect(inventedFigure(prompt, 'The insurer allows 7.5 hours... no: 3.4 and 4.1 hours at PLN 95 per hour, and deducts PLN 1,593.00.')).toBeNull();
+    expect(inventedFigure(prompt, 'The repair should cost about PLN 7,200.')).toBe('7,200');
   });
 });
 

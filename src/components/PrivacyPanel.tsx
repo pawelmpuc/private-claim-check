@@ -66,7 +66,7 @@ export function PrivacyPanel({ device, onDeviceChange, allowCloud, onAllowCloud,
               {log.map((entry) => (
                 <li key={entry.at + entry.step}>
                   <time>{new Date(entry.at).toLocaleTimeString(lang === 'pl' ? 'pl-PL' : 'en-GB')}</time>
-                  <span>{t(entry.step === 'read' ? 'logRead' : 'logLetter')}</span>
+                  <span>{t(entry.step === 'read' ? 'logRead' : entry.step === 'explain' ? 'logExplain' : 'logLetter')}</span>
                   <span className={`chip chip-src-${entry.source}`}>
                     <span className="dot" aria-hidden="true" />
                     {t(SOURCE_KEY[entry.source])}

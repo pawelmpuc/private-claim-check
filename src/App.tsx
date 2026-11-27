@@ -106,7 +106,7 @@ export function App() {
 
         {estimate && (
           <>
-            <StepReview estimate={estimate} onChange={setEstimate} onCurrency={changeCurrency} country={country} onCountry={changeCountry} settings={settings} onSettings={setSettings} rawRead={rawRead} rawFromPdf={rawFromPdf} />
+            <StepReview estimate={estimate} onChange={setEstimate} onCurrency={changeCurrency} country={country} onCountry={changeCountry} settings={settings} onSettings={setSettings} rawRead={rawRead} rawFromPdf={rawFromPdf} allowCloud={allowCloud} onLog={addLog} />
             <StepAdd
               variant="quote"
               allowCloud={allowCloud}

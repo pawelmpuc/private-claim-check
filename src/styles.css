@@ -797,3 +797,24 @@ textarea {
     display: none;
   }
 }
+
+/* Plain-language explanation */
+.explain {
+  margin-top: 22px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.explain-text {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: #faf9f5;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.live-text {
+  color: var(--muted);
+}

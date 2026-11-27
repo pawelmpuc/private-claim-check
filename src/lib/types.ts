@@ -66,7 +66,7 @@ export type InferenceSource = 'on_device' | 'in_cloud' | 'none';
 
 export interface InferenceLogEntry {
   at: number;
-  step: 'read' | 'letter';
+  step: 'read' | 'letter' | 'explain';
   source: InferenceSource;
   redactions: number;
   note?: string;
