@@ -6,10 +6,19 @@
     <meta name="description" content="Check a car repair estimate from your insurer. The estimate is read on your own device." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2317212b'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11' fill='none' stroke='%2337c9a4' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
     <title>Private Claim Check</title>
-    <script type="module" crossorigin src="./assets/index-BHZRUj4g.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CKVFqrVE.css">
+    <script type="module" crossorigin src="./assets/index-DeEMATdo.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Dii2gc3j.css">
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // If the app's code cannot even be parsed (a very old browser or Android System WebView), say so instead of showing a blank page.
+      window.addEventListener('error', function () {
+        var root = document.getElementById('root');
+        if (root && !root.firstChild) {
+          root.innerHTML = '<p style="font: 16px/1.5 system-ui, sans-serif; margin: 24px">Private Claim Check could not start in this browser. Please update your browser (on Android: Android System WebView and Chrome) and open it again.</p>';
+        }
+      });
+    </script>
   </body>
 </html>
