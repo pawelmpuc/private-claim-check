@@ -9,6 +9,15 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // If the app's code cannot even be parsed (a very old browser or Android System WebView), say so instead of showing a blank page.
+      window.addEventListener('error', function () {
+        var root = document.getElementById('root');
+        if (root && !root.firstChild) {
+          root.innerHTML = '<p style="font: 16px/1.5 system-ui, sans-serif; margin: 24px">Private Claim Check could not start in this browser. Please update your browser (on Android: Android System WebView and Chrome) and open it again.</p>';
+        }
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
