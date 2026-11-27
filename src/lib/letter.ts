@@ -141,19 +141,30 @@ PISMO:
 `,
 };
 
-const digitsOf = (text: string) => (text.match(/\d+(?:[ \u00a0\u202f.,]\d+)*/g) ?? []).map((t) => t.replace(/\D/g, ''));
+const NUMBER = /\d+(?:[ \u00a0\u202f.,]\d+)*/g;
+const numbersOf = (text: string) => (text.match(NUMBER) ?? []).map((raw) => ({ raw, digits: raw.replace(/\D/g, '') }));
 const tagsOf = (text: string) => text.match(/\[[A-Z ]+\]/g) ?? [];
+
+export interface RewriteCheck {
+  ok: boolean;
+  reason?: 'number_added' | 'number_missing' | 'placeholder_missing';
+  /** The number or placeholder that failed the check, as written. */
+  value?: string;
+}
 
 /**
  * Checks a model-edited letter against the draft it was made from.
  * The edit is rejected if it contains a number the draft does not, drops a number, or drops a placeholder.
  */
-export function verifyRewrite(draft: string, rewritten: string): { ok: boolean; reason?: 'number_added' | 'number_missing' | 'placeholder_missing' } {
-  const allowed = digitsOf(draft);
-  const got = digitsOf(rewritten);
-  if (got.some((n) => !allowed.includes(n))) return { ok: false, reason: 'number_added' };
-  if (allowed.some((n) => n.length >= 3 && !got.includes(n))) return { ok: false, reason: 'number_missing' };
+export function verifyRewrite(draft: string, rewritten: string): RewriteCheck {
+  const allowed = numbersOf(draft);
+  const got = numbersOf(rewritten);
+  const added = got.find((n) => !allowed.some((a) => a.digits === n.digits));
+  if (added) return { ok: false, reason: 'number_added', value: added.raw };
+  const missing = allowed.find((a) => a.digits.length >= 3 && !got.some((n) => n.digits === a.digits));
+  if (missing) return { ok: false, reason: 'number_missing', value: missing.raw };
   const tags = new Set(tagsOf(rewritten));
-  if (tagsOf(draft).some((t) => !tags.has(t))) return { ok: false, reason: 'placeholder_missing' };
+  const lost = tagsOf(draft).find((t) => !tags.has(t));
+  if (lost) return { ok: false, reason: 'placeholder_missing', value: lost };
   return { ok: true };
 }

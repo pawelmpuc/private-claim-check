@@ -24,6 +24,8 @@ export function StepLetter({ estimate, findings, selected, tier, onTier, allowCl
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [live, setLive] = useState('');
+  const [discarded, setDiscarded] = useState<string | null>(null);
   // The letter goes to the insurer, so its language can differ from the interface language.
   const [letterLang, setLetterLang] = useState<Lang>(lang);
   useEffect(() => setLetterLang(lang), [lang]);
@@ -34,23 +36,30 @@ export function StepLetter({ estimate, findings, selected, tier, onTier, allowCl
   const body = rewrite && rewrite.draft === draft ? rewrite.text : draft;
   const [text, setText] = useState('');
   useEffect(() => setText(fillDetails(body, details, letterLang)), [body, details, letterLang]);
-  useEffect(() => setMessage(null), [draft]);
+  useEffect(() => {
+    setMessage(null);
+    setDiscarded(null);
+  }, [draft]);
 
   const polish = async () => {
     setBusy(true);
     setMessage(null);
+    setLive('');
+    setDiscarded(null);
     try {
       const prompt = POLISH_PROMPT[letterLang] + draft;
       const safe = redact(prompt);
-      const res = await run({ deviceParts: [prompt], cloudParts: [safe.text], allowCloud, outputLang: letterLang });
+      const res = await run({ deviceParts: [prompt], cloudParts: [safe.text], allowCloud, outputLang: letterLang, onText: setLive });
       onLog({ step: 'letter', source: res.source, redactions: res.source === 'in_cloud' ? safe.count : 0, note: res.deviceError ? 'device_failed' : undefined });
       const candidate = res.text.trim();
-      if (verifyRewrite(draft, candidate).ok) {
+      const check = verifyRewrite(draft, candidate);
+      if (check.ok) {
         setRewrite({ draft, text: candidate });
         setMessage({ kind: 'ok', text: t('polishOk', { where: t(res.source === 'on_device' ? 'srcDevice' : 'srcCloud') }) });
       } else {
         setRewrite(null);
-        setMessage({ kind: 'error', text: t('polishRejected') });
+        setDiscarded(candidate);
+        setMessage({ kind: 'error', text: t(`polishRejected_${check.reason ?? 'number_added'}` as Key, { value: check.value ?? '' }) });
       }
     } catch (err) {
       if (err instanceof DeviceTimeoutError) setMessage({ kind: 'error', text: t('errDeviceTimeout', { s: DEVICE_START_TIMEOUT_S }) });
@@ -141,10 +150,17 @@ export function StepLetter({ estimate, findings, selected, tier, onTier, allowCl
               {t('print')}
             </button>
           </div>
+          {busy && live && <pre className="live" aria-live="off">{live}</pre>}
           {message && (
             <p className={message.kind === 'ok' ? 'success' : 'error'} role="status">
               {message.text}
             </p>
+          )}
+          {discarded && (
+            <details className="raw no-print">
+              <summary>{t('polishDiscarded')}</summary>
+              <pre>{discarded}</pre>
+            </details>
           )}
           <pre className="print-only">{text}</pre>
         </>
