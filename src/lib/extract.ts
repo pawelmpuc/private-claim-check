@@ -176,6 +176,8 @@ interface Row {
    * copied as the two cells "-1" and "593,00"; the printed total decides which is right.
    */
   alt: number | null;
+  /** Row number, amount and start of the description, when the row was printed with a number. */
+  numbered: string | null;
 }
 
 function parseRows(text: string, state: { section: ItemKind | null; total: number | null; currency: string | null }): Row[] {
@@ -200,7 +202,19 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
       continue;
     }
     // A leading row number such as "3 | Błotnik | ...".
-    if (cells.length > 2 && /^\d{1,3}\.?$/.test(cells[0]) && !numericAt[1]) cells = cells.slice(1);
+    // "Parts | 1 | Front bumper | ...": the section name written in front of a numbered row.
+    if (cells.length > 3 && cells[0].split(/\s+/).length <= 2 && /^\d{1,3}\.?$/.test(cells[1]) && !NUMERIC_CELL.test(cells[2])) {
+      const lead = sectionOf(cells[0]);
+      if (lead) {
+        state.section = lead;
+        cells = cells.slice(1);
+      }
+    }
+    let rowNo: string | null = null;
+    if (cells.length > 2 && /^\d{1,3}\.?$/.test(cells[0]) && !NUMERIC_CELL.test(cells[1])) {
+      rowNo = cells[0].replace('.', '');
+      cells = cells.slice(1);
+    }
 
     const texts = cells.filter((c) => !NUMERIC_CELL.test(c) && !PERCENT_CELL.test(c) && qualityOf(c) == null);
     // Some transcriptions put the section name in front of a row, or in place of its description.
@@ -269,6 +283,7 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
       signature: String(amount),
       rate,
       alt,
+      numbered: rowNo ? `${rowNo}|${amount}|${key.slice(0, 4)}` : null,
     });
   }
   return rows;
@@ -290,8 +305,16 @@ function commonest(values: number[]): number | null {
 export function parseTranscription(tiles: string[], fallbackCurrency = 'EUR'): Estimate {
   const state = { section: null as ItemKind | null, total: null as number | null, currency: null as string | null };
   const rows: Row[] = [];
+  const seen = new Set<string>();
   for (const tile of tiles) {
-    const next = parseRows(tile, state);
+    // A numbered row that was already read is a repeat: from the overlap of two tiles,
+    // or from the model writing the same row twice.
+    const next = parseRows(tile, state).filter((r) => {
+      if (!r.numbered) return true;
+      if (seen.has(r.numbered)) return false;
+      seen.add(r.numbered);
+      return true;
+    });
     let overlap = 0;
     for (let k = Math.min(8, rows.length, next.length); k > 0; k -= 1) {
       const tail = rows.slice(-k).map((r) => r.signature).join('~');

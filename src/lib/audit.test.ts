@@ -250,6 +250,46 @@ TOTAL REPAIR COST NET | 983.20`,
     expect(est.labourRate).toBe(38);
   });
 
+  it('drops numbered rows the model wrote twice', () => {
+    // Real output for the English sample: row 1 came back a second time under the next heading,
+    // and row 4 again at the top of the second tile.
+    const est = parseTranscription([
+      `Parts | 1 | Front bumper | Non-OEM | 1 | 310.00 | 310.00
+|---|---|---|---|---|---|---
+| 2 | Left LED headlamp | OEM | 1 | 720.00 | 720.00
+| 3 | Left front wing | Non-OEM | 1 | 190.00 | 190.00
+| 4 | Left front suspension arm | Non-OEM | 1 | 105.00 | 105.00
+| Labour | | | | | | |
+| No. | Description | Part type | Qty / hours | Unit price | Net GBP |
+| 1 | Front bumper | Non-OEM | 1 | 310.00 | 310.00`,
+      `4 | Left front suspension arm | Non-OEM | 1 | 105.00 | 105.00
+LABOUR |
+5 | Replace bumper and headlamp | 3.4 | 38.00 | 129.20
+6 | Replace wing and suspension arm | 4.1 | 38.00 | 155.80
+PAINT |
+7 | Paint bumper and wing | 5.2 | 40.00 | 208.00
+8 | Paint materials | 1 | 150.00 | 150.00
+DEDUCTIONS |
+9 | Betterment on parts 30% | -397.50 |
+10 | Discount on paint materials 20% | -30.00 |
+TOTAL REPAIR COST NET | 1,540.50`,
+    ]);
+    expect(est).toMatchObject({ currency: 'GBP', labourRate: 38, paintRate: 40, statedTotal: 1540.5 });
+    expect(est.items.map((i) => [i.kind, i.partQuality, i.hours, i.total])).toEqual([
+      ['part', 'alternative', null, 310],
+      ['part', 'oem', null, 720],
+      ['part', 'alternative', null, 190],
+      ['part', 'alternative', null, 105],
+      ['labour', 'unknown', 3.4, 129.2],
+      ['labour', 'unknown', 4.1, 155.8],
+      ['paint', 'unknown', 5.2, 208],
+      ['material', 'unknown', null, 150],
+      ['deduction', 'unknown', null, 397.5],
+      ['deduction', 'unknown', null, 30],
+    ]);
+    expect(netOfItems(est)).toBe(1540.5);
+  });
+
   it('marks a doubtful amount when there is no total to settle it', () => {
     const est = parseTranscription(['Potrącenia | Amortyzacja części 30% | -1 | 593,00 | -593,00']);
     expect(est.items[0]).toMatchObject({ kind: 'deduction', total: 593, check: true });
