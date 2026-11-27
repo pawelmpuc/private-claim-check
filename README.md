@@ -45,7 +45,12 @@ A browser can report the on-device model as available and still fail to start it
 
 The panel at the top of the page logs each request with the place it ran, taken from `response.inferenceSource`.
 
-The two paths ask for different output. The cloud model answers in JSON mode. The on-device model answers in a compact line format (`kind | quality | hours | amount | description`) that is streamed to the page while it is written. A line format needs about a third of the output tokens of JSON, which decides whether reading a page on a laptop takes seconds or minutes, and the user can watch the lines arrive and stop the run.
+The two paths read a page differently.
+
+- **Cloud.** The whole page goes to Gemini in one request, in JSON mode.
+- **Device.** Gemini Nano copies a table well and restructures it badly, and it scales every image down to a small fixed size. So the app trims the white margins, cuts the page into wide overlapping tiles, and asks the model only to transcribe each tile row by row. The transcription is streamed to the page as it is written. Plain TypeScript then sorts the rows into parts, labour, paint, materials and deductions (`parseTranscription` in `src/lib/extract.ts`) and drops rows that two tiles share. The unit tests for that parser use transcriptions Gemini Nano actually produced, misreadings included.
+
+A row is treated as a deduction only on evidence in the row itself: a negative amount or a word such as "rabat" or "depreciation". A section heading alone is not enough, because a misread heading would otherwise add money to the claim.
 
 ## Run it
 
@@ -84,7 +89,8 @@ The tests cover the audit arithmetic, number parsing, the letter guard and redac
 - The hourly rates shipped with the app are examples, not market data. The user is asked to replace them.
 - The missing-operation checks are keyword heuristics. They raise questions; they do not put a price on anything.
 - Redaction is pattern-based. It does not recognise names or street addresses.
-- On-device input is limited to about 9,000 tokens per request, so the app reads one page at a time, up to six pages.
+- On a laptop without a discrete GPU a tile takes about 45 seconds, so a full page takes a few minutes on the device. Up to six pages are read.
+- The on-device model misreads some words, especially with diacritics. Amounts and hours came through correctly in our tests, and the user is asked to check every line.
 - This is information, not legal advice.
 
 ## Licence

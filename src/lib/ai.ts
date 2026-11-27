@@ -91,6 +91,8 @@ export interface RunRequest {
   /** Sent when the request has to go to the cloud. Build it from redacted text. */
   cloudParts: Array<string | Part>;
   allowCloud: boolean;
+  /** Force one path. The caller has then already decided where the request may run. */
+  only?: 'device' | 'cloud';
   /** Ask the cloud model for JSON. The on-device prompt asks for its own format. */
   cloudJson?: boolean;
   /** Language of the reply. Defaults to English. */
@@ -112,7 +114,8 @@ export async function run(req: RunRequest): Promise<RunResult> {
   const lang = req.outputLang ?? 'en';
   const options = req.signal ? { signal: req.signal } : undefined;
   let deviceTimedOut = false;
-  if ((await deviceStatus(lang)) === 'available') {
+  const status = req.only === 'cloud' ? 'unavailable' : await deviceStatus(lang);
+  if (status === 'available') {
     // A browser can report the model as available and still never start it, so the
     // device attempt is abandoned if no text arrives in time.
     const attempt = new AbortController();
@@ -147,7 +150,7 @@ export async function run(req: RunRequest): Promise<RunResult> {
       req.signal?.removeEventListener('abort', forward);
     }
   }
-  if (!req.allowCloud) {
+  if (!req.allowCloud || req.only === 'device') {
     if (deviceTimedOut) throw new DeviceTimeoutError(deviceError);
     throw new CloudNotAllowedError(deviceError ?? 'The on-device model is not available.');
   }

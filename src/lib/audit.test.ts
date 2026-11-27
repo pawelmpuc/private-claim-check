@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { audit, defaultSettings, netOfItems, tierTotals } from './audit';
-import { mergeEstimates, normalizeEstimate, parseCompact, parseModelJson, parseNumber } from './extract';
+import { mergeEstimates, normalizeEstimate, parseModelJson, parseNumber, parseTranscription } from './extract';
 import { draftLetter, verifyRewrite } from './letter';
 import { redact } from './redact';
 import { countryForCurrency } from './countries';
@@ -97,22 +97,72 @@ describe('extract', () => {
     expect(est.items.map((i) => i.desc)).toEqual(['Wymiana zderzaka', 'Utylizacja odpadów']);
   });
 
-  it('parses the on-device line format', () => {
-    const est = parseCompact(`CURRENCY: PLN
-LABOUR_RATE: 95,00
-PAINT_RATE: -
-TOTAL: 5 437,50
-part | alt | - | 1240.00 | Zderzak przedni
-- labour | - | 3,4 | 323.00 | Wymiana zderzaka | i reflektora
-deduction | - | - | -1593.00 | Amortyzacja części 30%
-other | - | - | 5437.50 | RAZEM KOSZT NAPRAWY NETTO
-this line is noise`);
-    expect(est).toMatchObject({ currency: 'PLN', labourRate: 95, paintRate: null, statedTotal: 5437.5 });
-    expect(est.items.map((i) => [i.kind, i.partQuality, i.hours, i.total, i.desc])).toEqual([
-      ['part', 'alternative', null, 1240, 'Zderzak przedni'],
-      ['labour', 'unknown', 3.4, 323, 'Wymiana zderzaka | i reflektora'],
-      ['deduction', 'unknown', null, 1593, 'Amortyzacja części 30%'],
+  // These are transcriptions Gemini Nano produced in Chrome from the sample estimate, mistakes included.
+  const TOP = `**CZĘŚCI ZAMIENNE**
+Zderzak przedni | Q | 1 | 1 240,00 | 1 240,00
+Reflektor lewy LED | O | 1 | 2 890,00 | 2 890,00
+Blotnik przedni lewy | PJ | 1 | 760,00 | 760,00
+Wahacz przedni lewy | Q | 1 | 420,00 | 420,00
+
+**ROBOTCZINA**
+Wymiana zderzaka i reflektora | 3,4 | 95,00 | 323,00
+Wymiana blotnika i wahacza | 4,1 | 95,00 | 389,50
+
+**LAKIEROWANIE**
+Lakierowanie zderzaka i blotnika | 5,2 | 100,00 | 520,00
+
+**POTRA CENIA**
+Amortyzacja części 30% | - | - | -1 593,00
+Rabat na materiał lakierniczy 20% | | | -122,00
+
+RAZEM KOST NETTO | | | 5 437,50`;
+  const BAND_A = `CZĘŚCI ZAMIENNE | Jakość | Ilość / rbh | Cena jedn. | Netto PLN
+1 | Zderzak przedni | Q | 1 | 1 240,00 | 1 240,00
+2 | Reflektor lewy LED | O | 1 | 2 890,00 | 2 890,00
+3 | Blotnik przedni lewy | PJ | 1 | 760,00 | 760,00
+4 | Wahacz przedni lewy | Q | 1 | 420,00 | 420,00
+ROBOTCZINA | Wymiana zderzaka i reflektora | 3,4 | 95,00 | 323,00
+`;
+  const BAND_B = `Robocizna | Ekspertyza i reflektora | 3,4 | 95,00 | 323,00
+Robocizna | Wymiana błotnika i wahacza | 4,1 | 95,00 | 389,50
+Lakierowanie | Lakierowanie zderzaka i błotnika | 5,2 | 100,00 | 520,00
+Potrącenia | Materiał lakierniczy | 1 | 610,00 | 610,00
+Potrącenia | Amortyzacja części 30% | - | | -1 593,00
+Potrącenia | Rabat na materiał lakierniczy 20% | | | -122,00
+Razem koszt naprawy netto | | | | 5 437,50`;
+
+  it('structures a real on-device transcription of a whole page', () => {
+    const est = parseTranscription([TOP]);
+    expect(est).toMatchObject({ labourRate: 95, paintRate: 100, statedTotal: 5437.5 });
+    expect(est.items.map((i) => [i.kind, i.partQuality, i.hours, i.total])).toEqual([
+      ['part', 'alternative', null, 1240],
+      ['part', 'oem', null, 2890],
+      ['part', 'alternative', null, 760],
+      ['part', 'alternative', null, 420],
+      ['labour', 'unknown', 3.4, 323],
+      ['labour', 'unknown', 4.1, 389.5],
+      ['paint', 'unknown', 5.2, 520],
+      ['deduction', 'unknown', null, 1593],
+      ['deduction', 'unknown', null, 122],
     ]);
+  });
+
+  it('joins overlapping tiles and does not turn a mislabelled row into a deduction', () => {
+    const est = parseTranscription([BAND_A, BAND_B]);
+    expect(est).toMatchObject({ currency: 'PLN', labourRate: 95, paintRate: 100, statedTotal: 5437.5 });
+    expect(est.items.map((i) => [i.kind, i.total])).toEqual([
+      ['part', 1240],
+      ['part', 2890],
+      ['part', 760],
+      ['part', 420],
+      ['labour', 323],
+      ['labour', 389.5],
+      ['paint', 520],
+      ['material', 610],
+      ['deduction', 1593],
+      ['deduction', 122],
+    ]);
+    expect(netOfItems(est)).toBe(5437.5);
   });
 
   it('merges pages and keeps the last total', () => {

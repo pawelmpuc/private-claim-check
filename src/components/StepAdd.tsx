@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, DeviceTimeoutError, firebaseConfigured, imagePart, NotConfiguredError, run } from '../lib/ai';
-import { emptyItem, mergeEstimates, normalizeEstimate, parseCompact, parseModelJson, READ_PROMPT, READ_PROMPT_COMPACT } from '../lib/extract';
-import { filesToPages, MAX_PAGES, type PageImage } from '../lib/files';
+import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, deviceStatus, DeviceTimeoutError, firebaseConfigured, imagePart, NotConfiguredError, run } from '../lib/ai';
+import { emptyItem, mergeEstimates, normalizeEstimate, parseModelJson, parseTranscription, READ_PROMPT, TRANSCRIBE_PROMPT, TRANSCRIBE_TEXT_PROMPT } from '../lib/extract';
+import { filesToPages, MAX_PAGES, tilesOf, type PageImage } from '../lib/files';
 import { redact } from '../lib/redact';
 import { sampleEstimate } from '../lib/sample';
 import type { Estimate, InferenceLogEntry } from '../lib/types';
@@ -24,9 +24,6 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState('');
   const abort = useRef<AbortController | null>(null);
-
-  // The on-device model answers in a line format, the cloud model in JSON.
-  const toEstimate = (res: { text: string; source: string }) => (res.source === 'on_device' ? parseCompact(res.text) : normalizeEstimate(parseModelJson(res.text)));
 
   const fail = (err: unknown) => {
     if (abort.current?.signal.aborted) return;
@@ -63,17 +60,62 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
     }
   };
 
+  /**
+   * Reads one unit of work, a page image or the pasted text.
+   * On the device the page is transcribed tile by tile and structured in code;
+   * in the cloud the whole page is read in one JSON request.
+   */
+  const readOne = async (device: () => Promise<string[]>, cloud: (note?: 'device_failed') => Promise<Estimate>): Promise<Estimate> => {
+    let deviceFailed = false;
+    if ((await deviceStatus()) === 'available') {
+      try {
+        const estimate = parseTranscription(await device());
+        onLog({ step: 'read', source: 'on_device', redactions: 0 });
+        return estimate;
+      } catch (err) {
+        if (abort.current?.signal.aborted || !allowCloud) throw err;
+        deviceFailed = true;
+      }
+    }
+    if (!allowCloud) throw new CloudNotAllowedError();
+    setLive('');
+    return cloud(deviceFailed ? 'device_failed' : undefined);
+  };
+
   const readPages = async () => {
     const signal = begin();
     try {
       const results: Estimate[] = [];
       for (let n = 0; n < pages.length; n += 1) {
+        const page = pages[n];
         setBusy(t('reading', { a: n + 1, b: pages.length }));
         setLive('');
-        const image = imagePart(pages[n].base64, pages[n].mimeType);
-        const res = await run({ deviceParts: [READ_PROMPT_COMPACT, image], cloudParts: [READ_PROMPT, image], allowCloud, cloudJson: true, onText: setLive, signal });
-        onLog({ step: 'read', source: res.source, redactions: 0, note: res.deviceError ? 'device_failed' : undefined });
-        results.push(toEstimate(res));
+        const estimate = await readOne(
+          async () => {
+            const tiles = await tilesOf(page);
+            const texts: string[] = [];
+            for (let k = 0; k < tiles.length; k += 1) {
+              setBusy(t('readingTile', { a: n + 1, b: pages.length, k: k + 1, n: tiles.length }));
+              const done = texts.join('\n');
+              const res = await run({
+                only: 'device',
+                deviceParts: [TRANSCRIBE_PROMPT, imagePart(tiles[k].base64, tiles[k].mimeType)],
+                cloudParts: [],
+                allowCloud: false,
+                onText: (text) => setLive(done ? `${done}\n${text}` : text),
+                signal,
+              });
+              texts.push(res.text);
+            }
+            return texts;
+          },
+          async (note) => {
+            const res = await run({ only: 'cloud', deviceParts: [], cloudParts: [READ_PROMPT, imagePart(page.base64, page.mimeType)], allowCloud: true, cloudJson: true, signal });
+            onLog({ step: 'read', source: res.source, redactions: 0, note });
+            return normalizeEstimate(parseModelJson(res.text));
+          },
+        );
+        results.push(estimate);
       }
       finish(mergeEstimates(results));
     } catch (err) {
@@ -87,17 +129,19 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
     const signal = begin();
     setBusy(t('readingText'));
     try {
-      const safe = redact(text);
-      const res = await run({
-        deviceParts: [`${READ_PROMPT_COMPACT}\n\nDOCUMENT:\n${text}`],
-        cloudParts: [`${READ_PROMPT}\n\nDOCUMENT:\n${safe.text}`],
-        allowCloud,
-        cloudJson: true,
-        onText: setLive,
-        signal,
-      });
-      onLog({ step: 'read', source: res.source, redactions: res.source === 'in_cloud' ? safe.count : 0, note: res.deviceError ? 'device_failed' : undefined });
-      finish(toEstimate(res));
+      const estimate = await readOne(
+        async () => {
+          const res = await run({ only: 'device', deviceParts: [`${TRANSCRIBE_TEXT_PROMPT}\n\nTEXT:\n${text}`], cloudParts: [], allowCloud: false, onText: setLive, signal });
+          return [res.text];
+        },
+        async (note) => {
+          const safe = redact(text);
+          const res = await run({ only: 'cloud', deviceParts: [], cloudParts: [`${READ_PROMPT}\n\nDOCUMENT:\n${safe.text}`], allowCloud: true, cloudJson: true, signal });
+          onLog({ step: 'read', source: res.source, redactions: safe.count, note });
+          return normalizeEstimate(parseModelJson(res.text));
+        },
+      );
+      finish(estimate);
     } catch (err) {
       fail(err);
     } finally {

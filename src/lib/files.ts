@@ -56,3 +56,68 @@ export async function filesToPages(files: File[]): Promise<PageImage[]> {
   }
   return pages.slice(0, MAX_PAGES);
 }
+
+function loadImage(page: PageImage): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('The page image could not be read.'));
+    img.src = page.previewUrl;
+  });
+}
+
+/**
+ * Cuts a page into wide, overlapping tiles for the on-device model.
+ *
+ * The built-in model scales every image down to a small fixed size. A whole A4 page
+ * leaves the text too small to read, while a tile that is wider than it is tall keeps
+ * the lines legible. White margins are trimmed first.
+ */
+export async function tilesOf(page: PageImage): Promise<PageImage[]> {
+  const img = await loadImage(page);
+  const full = document.createElement('canvas');
+  full.width = img.naturalWidth;
+  full.height = img.naturalHeight;
+  const ctx = full.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(img, 0, 0);
+
+  // Bounding box of everything that is not near-white.
+  const { data, width, height } = ctx.getImageData(0, 0, full.width, full.height);
+  let top = height, bottom = -1, left = width, right = -1;
+  for (let y = 0; y < height; y += 2) {
+    for (let x = 0; x < width; x += 2) {
+      const i = (y * width + x) * 4;
+      if (data[i] + data[i + 1] + data[i + 2] < 600) {
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+    }
+  }
+  if (bottom < 0) return [page];
+  const pad = 12;
+  left = Math.max(0, left - pad);
+  top = Math.max(0, top - pad);
+  const w = Math.min(width, right + pad) - left;
+  const h = Math.min(height, bottom + pad) - top;
+
+  const tileHeight = Math.round(w * 0.5);
+  const overlap = Math.round(tileHeight * 0.14);
+  const count = h <= tileHeight ? 1 : Math.ceil((h - overlap) / (tileHeight - overlap));
+  const each = Math.ceil((h + (count - 1) * overlap) / count);
+  const tiles: PageImage[] = [];
+  for (let n = 0; n < count; n += 1) {
+    const y = top + n * (each - overlap);
+    const th = Math.min(each, top + h - y);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = th;
+    const c = canvas.getContext('2d')!;
+    c.fillStyle = '#fff';
+    c.fillRect(0, 0, w, th);
+    c.drawImage(full, left, y, w, th, 0, 0, w, th);
+    tiles.push(canvasToPage(canvas));
+  }
+  return tiles;
+}
