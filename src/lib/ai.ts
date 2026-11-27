@@ -47,7 +47,67 @@ function loadRemoteConfig(app: FirebaseApp): void {
 
 const env = import.meta.env;
 
-export const firebaseConfigured = Boolean(env.VITE_FIREBASE_API_KEY && env.VITE_FIREBASE_PROJECT_ID && env.VITE_FIREBASE_APP_ID);
+/**
+ * Inside the Android app the page has no Firebase web SDK to talk to. The native side
+ * exposes `PccNative`, and every model call goes through the Firebase AI Logic Android
+ * SDK instead (android/app/src/main/java/.../AiBridge.kt). The routing below stays the
+ * same: this file still decides whether a request may run on the device or in the cloud.
+ */
+interface NativeReply {
+  id: string;
+  ok?: boolean;
+  error?: string;
+  chunk?: string;
+  progress?: number;
+  status?: DeviceStatus;
+  text?: string;
+  source?: 'on_device' | 'in_cloud';
+}
+const nativeBridge = (globalThis as unknown as { PccNative?: { post(message: string): void } }).PccNative;
+export const isNativeApp = Boolean(nativeBridge);
+const nativePending = new Map<string, { resolve: (r: NativeReply) => void; reject: (e: Error) => void; onEvent?: (r: NativeReply) => void }>();
+let nativeSeq = 0;
+
+if (nativeBridge) {
+  (globalThis as unknown as { __pccNativeReply: (json: string) => void }).__pccNativeReply = (json) => {
+    const reply = JSON.parse(json) as NativeReply;
+    const waiting = nativePending.get(reply.id);
+    if (!waiting) return;
+    if (reply.ok === undefined) return waiting.onEvent?.(reply);
+    nativePending.delete(reply.id);
+    if (reply.ok) waiting.resolve(reply);
+    else waiting.reject(reply.error === 'not_configured' ? new NotConfiguredError('Firebase is not configured.') : new Error(reply.error ?? 'Native request failed.'));
+  };
+}
+
+function nativeCall(op: string, payload: object, onEvent?: (r: NativeReply) => void, signal?: AbortSignal): Promise<NativeReply> {
+  const id = `n${++nativeSeq}`;
+  return new Promise((resolve, reject) => {
+    nativePending.set(id, { resolve, reject, onEvent });
+    signal?.addEventListener('abort', () => {
+      if (!nativePending.delete(id)) return;
+      nativeBridge!.post(JSON.stringify({ id, op: 'cancel' }));
+      reject(new DOMException('Aborted', 'AbortError'));
+    });
+    nativeBridge!.post(JSON.stringify({ id, op, ...payload }));
+  });
+}
+
+/** Debug builds of the Android app only: the App Check debug token to register in the Firebase console. */
+export async function nativeDebugToken(): Promise<string> {
+  if (!nativeBridge) return '';
+  try {
+    return (await nativeCall('debugToken', {})).text ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** Text and images in the shape the native bridge takes. */
+const nativeParts = (parts: Array<string | Part>) =>
+  parts.map((part) => (typeof part === 'string' ? { text: part } : 'inlineData' in part ? { data: part.inlineData.data, mimeType: part.inlineData.mimeType } : { text: 'text' in part ? part.text : '' }));
+
+export const firebaseConfigured = isNativeApp || Boolean(env.VITE_FIREBASE_API_KEY && env.VITE_FIREBASE_PROJECT_ID && env.VITE_FIREBASE_APP_ID);
 
 let ai: AI | null = null;
 
@@ -92,6 +152,13 @@ const FORCE_NO_DEVICE = typeof location !== 'undefined' && new URLSearchParams(l
 
 export async function deviceStatus(outputLang = 'en'): Promise<DeviceStatus> {
   if (FORCE_NO_DEVICE) return 'unavailable';
+  if (nativeBridge) {
+    try {
+      return (await nativeCall('status', {})).status ?? 'unavailable';
+    } catch {
+      return 'unavailable';
+    }
+  }
   const lm = (globalThis as unknown as { LanguageModel?: LanguageModelGlobal }).LanguageModel;
   if (!lm?.availability) return 'unavailable';
   try {
@@ -115,6 +182,10 @@ function model(mode: InferenceMode, outputLang = 'en', cloudJsonSchema?: object)
 
 /** Must be called from a click handler. Downloads the on-device model if Chrome has not done so yet. */
 export async function downloadDeviceModel(onProgress: (fraction: number) => void): Promise<void> {
+  if (nativeBridge) {
+    await nativeCall('download', {}, (event) => event.progress != null && onProgress(event.progress));
+    return;
+  }
   await model(InferenceMode.ONLY_ON_DEVICE).initializeDeviceModel(onProgress);
 }
 
@@ -163,6 +234,16 @@ export async function run(req: RunRequest): Promise<RunResult> {
       }, tuning.deviceTimeoutS * 1000);
     });
     const stream = (async () => {
+      if (nativeBridge) {
+        let text = '';
+        const done = await nativeCall('generate', { mode: 'device', model: tuning.cloudModel, parts: nativeParts(req.deviceParts) }, (event) => {
+          if (event.chunk == null) return;
+          clearTimeout(timer);
+          text += event.chunk;
+          req.onText?.(text);
+        }, attempt.signal);
+        return done.text ?? text;
+      }
       const result = await model(InferenceMode.ONLY_ON_DEVICE, lang).generateContentStream(req.deviceParts, { signal: attempt.signal });
       let text = '';
       for await (const chunk of result.stream) {
@@ -186,6 +267,10 @@ export async function run(req: RunRequest): Promise<RunResult> {
   if (!req.allowCloud || req.only === 'device') {
     if (deviceTimedOut) throw new DeviceTimeoutError(deviceError);
     throw new CloudNotAllowedError(deviceError ?? 'The on-device model is not available.');
+  }
+  if (nativeBridge) {
+    const done = await nativeCall('generate', { mode: 'cloud', model: tuning.cloudModel, json: Boolean(req.cloudJson), parts: nativeParts(req.cloudParts) }, undefined, req.signal);
+    return { text: done.text ?? '', source: done.source === 'on_device' ? 'on_device' : 'in_cloud', deviceError };
   }
   const result = await model(InferenceMode.ONLY_IN_CLOUD, lang, req.cloudJson ? {} : undefined).generateContent(req.cloudParts, options);
   const reported = result.response.inferenceSource;

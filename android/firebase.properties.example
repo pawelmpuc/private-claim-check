@@ -1,0 +1,6 @@
+# Copy to firebase.properties and fill in from the Firebase console
+# (Project settings, the Android app "io.github.pawelmpuc.privateclaimcheck").
+# The file is git-ignored.
+apiKey=
+applicationId=
+projectId=

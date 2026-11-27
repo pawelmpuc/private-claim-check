@@ -828,3 +828,40 @@ textarea {
   background: color-mix(in srgb, var(--device) 9%, white);
   border-color: color-mix(in srgb, var(--device) 40%, white);
 }
+
+.selftest dl > div {
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
+}
+
+.selftest dt {
+  font-weight: 600;
+}
+
+.selftest dd {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+}
+
+.selftest .pass dd {
+  color: var(--device);
+}
+
+.selftest .fail dd {
+  color: var(--error);
+}
+
+.dev-token {
+  margin-top: 14px;
+  font-size: 0.9rem;
+}
+
+.dev-token code {
+  display: block;
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: #f1efe8;
+  border-radius: 6px;
+  user-select: all;
+  word-break: break-all;
+}

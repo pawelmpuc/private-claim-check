@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "android:assets": "vite build && rm -rf android/app/src/main/assets/www && cp -r dist android/app/src/main/assets/www"
   },
   "keywords": [],
   "author": "",

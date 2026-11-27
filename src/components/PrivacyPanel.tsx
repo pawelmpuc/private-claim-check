@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { downloadDeviceModel, firebaseConfigured, type DeviceStatus } from '../lib/ai';
+import { useEffect, useState } from 'react';
+import { downloadDeviceModel, firebaseConfigured, isNativeApp, nativeDebugToken, type DeviceStatus } from '../lib/ai';
 import type { Key } from '../lib/i18n';
 import type { InferenceLogEntry } from '../lib/types';
 import { useT } from '../lib/useT';
@@ -25,6 +25,16 @@ export function PrivacyPanel({ device, onDeviceChange, allowCloud, onAllowCloud,
   const { t, lang } = useT();
   const [progress, setProgress] = useState<number | null>(null);
 
+  // Debug builds of the Android app show their App Check debug token, so it can be registered without logcat.
+  const [debugToken, setDebugToken] = useState('');
+  useEffect(() => {
+    if (!isNativeApp) return;
+    void nativeDebugToken().then(setDebugToken);
+    // The token is created a moment after the app starts.
+    const later = setTimeout(() => void nativeDebugToken().then(setDebugToken), 4000);
+    return () => clearTimeout(later);
+  }, [log.length]);
+
   const download = async () => {
     setProgress(0);
     try {
@@ -42,9 +52,9 @@ export function PrivacyPanel({ device, onDeviceChange, allowCloud, onAllowCloud,
         <div>
           <p className={`chip chip-${device}`}>
             <span className="dot" aria-hidden="true" />
-            {t(STATUS_KEY[device])}
+            {t(device === 'unavailable' && isNativeApp ? 'deviceUnavailableNative' : STATUS_KEY[device])}
           </p>
-          {device === 'unavailable' && <p className="help">{t('deviceHelp')}</p>}
+          {device === 'unavailable' && <p className="help">{t(isNativeApp ? 'deviceHelpNative' : 'deviceHelp')}</p>}
           {(device === 'downloadable' || device === 'downloading') && firebaseConfigured && (
             <button type="button" className="btn" onClick={download} disabled={progress != null}>
               {progress != null ? t('downloading', { pct: progress }) : t('downloadModel')}
@@ -80,6 +90,16 @@ export function PrivacyPanel({ device, onDeviceChange, allowCloud, onAllowCloud,
           )}
         </div>
       </div>
+      {debugToken && (
+        <details className="dev-token">
+          <summary>Developer build: App Check debug token</summary>
+          <p className="help">Cloud requests from this build are refused until this token is registered in the Firebase console: App Check, Apps, the Android app, Manage debug tokens.</p>
+          <code>{debugToken}</code>
+          <button type="button" className="btn" onClick={() => void navigator.clipboard?.writeText(debugToken).catch(() => undefined)}>
+            Copy
+          </button>
+        </details>
+      )}
     </section>
   );
 }

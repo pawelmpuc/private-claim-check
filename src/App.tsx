@@ -9,9 +9,13 @@ import { deviceStatus, type DeviceStatus } from './lib/ai';
 import { audit, defaultSettings } from './lib/audit';
 import { compareQuote } from './lib/compare';
 import { countryByCode, countryForCurrency } from './lib/countries';
+import { SelfTest } from './components/SelfTest';
 import { detectLang, translate } from './lib/i18n';
 import type { AuditSettings, Estimate, InferenceLogEntry, Lang, Tier } from './lib/types';
 import { LangContext } from './lib/useT';
+
+/** `?selftest` runs the on-device path by itself and writes the results on the page. */
+const SELF_TEST = typeof location !== 'undefined' && new URLSearchParams(location.search).has('selftest');
 
 export function App() {
   const [lang, setLang] = useState<Lang>(detectLang);
@@ -101,6 +105,7 @@ export function App() {
 
       <main className="wrap">
         <PrivacyPanel device={device} onDeviceChange={refreshDevice} allowCloud={allowCloud} onAllowCloud={setAllowCloud} log={log} />
+        {SELF_TEST && <SelfTest />}
 
         <StepAdd allowCloud={allowCloud} fallbackCurrency={countryByCode(country).currency} onEstimate={loadEstimate} onLog={addLog} hasEstimate={estimate != null} onReset={() => { setEstimate(null); setQuote(null); }} />
 
