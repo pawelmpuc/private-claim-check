@@ -162,7 +162,7 @@ export function StepLetter({ estimate, findings, selected, comparison, tier, onT
           {discarded && (
             <details className="raw no-print">
               <summary>{t('polishDiscarded')}</summary>
-              <pre>{discarded}</pre>
+              <pre className="live">{discarded}</pre>
             </details>
           )}
           <pre className="print-only">{text}</pre>
