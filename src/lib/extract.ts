@@ -41,7 +41,7 @@ Fields:
 - labourRate: hourly rate for body or mechanical work, as printed. null if not printed.
 - paintRate: hourly rate for paint work, as printed. null if not printed.
 - statedTotal: the total repair cost before VAT if the document shows one, otherwise the main total. null if not visible.
-- items: one entry for every line of the estimate.
+- items: one entry for every priced line of the estimate. Leave out section headings and leave out total, subtotal and VAT summary rows.
 
 For each item:
 - desc: the line text, copied in the original language.
@@ -80,6 +80,8 @@ export function parseNumber(v: unknown): number | null {
 
 const num = parseNumber;
 
+const SUMMARY_ROW = /\b(razem|suma|og[oó][lł]em|[lł][aą]cznie|total|subtotal|sum|gesamt|summe|netto|brutto|vat)\b/i;
+
 let counter = 0;
 export const newId = () => `i${Date.now().toString(36)}${(counter++).toString(36)}`;
 
@@ -113,7 +115,11 @@ export function normalizeEstimate(raw: unknown): Estimate {
         partQuality: kind === 'part' && QUALITIES.includes(it.partQuality as PartQuality) ? (it.partQuality as PartQuality) : 'unknown',
       } satisfies EstimateItem;
     })
-    .filter((it) => it.desc.length > 0);
+    .filter((it) => it.desc.length > 0)
+    // Section headings come back as lines without any number.
+    .filter((it) => !(it.kind === 'other' && it.total == null && it.unitPrice == null && it.hours == null))
+    // Total and subtotal rows would be counted twice.
+    .filter((it) => !(it.kind === 'other' && SUMMARY_ROW.test(it.desc)));
   const currency = String(r.currency ?? '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
   return {
     currency: currency.length === 3 ? currency : 'EUR',

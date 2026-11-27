@@ -83,6 +83,19 @@ describe('extract', () => {
     expect(est.items[0]).toMatchObject({ desc: 'Zderzak', total: 1240, partQuality: 'alternative' });
   });
 
+  it('drops section headings and total rows', () => {
+    const est = normalizeEstimate({
+      currency: 'PLN',
+      items: [
+        { desc: 'ROBOCIZNA', kind: 'other', total: null, partQuality: 'unknown' },
+        { desc: 'Wymiana zderzaka', kind: 'labour', hours: 3.4, total: 323, partQuality: 'unknown' },
+        { desc: 'RAZEM KOSZT NAPRAWY NETTO', kind: 'other', total: 5437.5, partQuality: 'unknown' },
+        { desc: 'Utylizacja odpadów', kind: 'other', total: 40, partQuality: 'unknown' },
+      ],
+    });
+    expect(est.items.map((i) => i.desc)).toEqual(['Wymiana zderzaka', 'Utylizacja odpadów']);
+  });
+
   it('merges pages and keeps the last total', () => {
     const a = normalizeEstimate({ currency: 'PLN', labourRate: 95, statedTotal: 100, items: [{ desc: 'a', kind: 'part', total: 1 }] });
     const b = normalizeEstimate({ currency: 'PLN', statedTotal: 900, items: [{ desc: 'b', kind: 'labour', total: 2 }] });
