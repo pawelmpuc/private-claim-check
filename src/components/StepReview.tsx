@@ -12,6 +12,8 @@ interface Props {
   onCountry: (code: string) => void;
   settings: AuditSettings;
   onSettings: (settings: AuditSettings) => void;
+  /** What the on-device model wrote, shown so the user can see where a line came from. */
+  rawRead: string | null;
 }
 
 const KINDS: ItemKind[] = ['part', 'labour', 'paint', 'material', 'deduction', 'other'];
@@ -33,7 +35,7 @@ function NumberField({ label, value, onChange, step = 'any' }: { label: string; 
   );
 }
 
-export function StepReview({ estimate, onChange, onCurrency, country, onCountry, settings, onSettings }: Props) {
+export function StepReview({ estimate, onChange, onCurrency, country, onCountry, settings, onSettings, rawRead }: Props) {
   const { t, lang } = useT();
   const currencies = CURRENCIES.includes(estimate.currency) ? CURRENCIES : [estimate.currency, ...CURRENCIES];
 
@@ -44,6 +46,13 @@ export function StepReview({ estimate, onChange, onCurrency, country, onCountry,
     <section className="card" aria-labelledby="step2">
       <h2 id="step2">{t('step2')}</h2>
       <p className="notice">{t('reviewHint')}</p>
+
+      {rawRead && (
+        <details className="raw">
+          <summary>{t('rawRead')}</summary>
+          <pre className="live">{rawRead}</pre>
+        </details>
+      )}
 
       <div className="fields">
         <label className="field">

@@ -156,7 +156,7 @@ const sectionOf = (text: string): ItemKind | null => {
 
 interface Row {
   item: EstimateItem;
-  /** The numbers of the row, used to recognise a row that two overlapping tiles both contain. */
+  /** The amount of the row, used to recognise rows that two overlapping tiles both contain. */
   signature: string;
   rate: number | null;
 }
@@ -184,22 +184,23 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
     if (cells.length > 2 && /^\d{1,3}\.?$/.test(cells[0]) && !numericAt[1]) cells = cells.slice(1);
 
     const texts = cells.filter((c) => !NUMERIC_CELL.test(c) && !PERCENT_CELL.test(c) && !QUALITY_CODE.test(c));
-    // Some transcriptions repeat the section name at the start of every row.
+    // Some transcriptions put the section name in front of a row, or in place of its description.
     let rowSection: ItemKind | null = null;
-    if (texts.length > 1) {
+    if (texts.length > 0 && texts[0].split(/\s+/).length <= 2) {
       rowSection = sectionOf(texts[0]);
       if (rowSection) {
         state.section = rowSection;
-        texts.shift();
+        if (texts.length > 1) texts.shift();
       }
     }
-    const desc = texts.join(' ').trim();
+    const desc = texts.join(' ').trim() || '?';
     const numbers = cells.filter((c) => NUMERIC_CELL.test(c));
     const values = numbers.map((c) => parseNumber(c)).filter((n): n is number => n != null);
-    if (!desc || values.length === 0) continue;
+    if (values.length === 0) continue;
     const last = numbers[numbers.length - 1];
     const amount = Math.abs(values[values.length - 1]);
     const negative = /^[-\u2212]/.test(last);
+    if (amount === 0) continue;
 
     if (SUMMARY_ROW.test(desc)) {
       state.total = amount;
@@ -225,7 +226,12 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
       if (values.length >= 3 && Math.abs(a * b - amount) <= Math.max(0.5, amount * 0.01)) {
         hours = a;
         rate = b;
-      } else if (values.length >= 2 && a < 200) {
+      } else if (values.length >= 3 && b >= 10 && amount / b >= 0.1 && amount / b <= 100) {
+        // The model sometimes copies the row number into the hours column.
+        // The rate and the amount still say how many hours were priced.
+        hours = Math.round((amount / b) * 100) / 100;
+        rate = b;
+      } else if (values.length === 2 && a < 100) {
         hours = a;
       }
     }
@@ -238,7 +244,7 @@ function parseRows(text: string, state: { section: ItemKind | null; total: numbe
 
     rows.push({
       item: { id: newId(), desc, kind, qty: null, hours, unitPrice: null, total: amount, partQuality },
-      signature: values.join('|'),
+      signature: String(amount),
       rate,
     });
   }
@@ -264,7 +270,7 @@ export function parseTranscription(tiles: string[], fallbackCurrency = 'EUR'): E
   for (const tile of tiles) {
     const next = parseRows(tile, state);
     let overlap = 0;
-    for (let k = Math.min(5, rows.length, next.length); k > 0; k -= 1) {
+    for (let k = Math.min(8, rows.length, next.length); k > 0; k -= 1) {
       const tail = rows.slice(-k).map((r) => r.signature).join('~');
       const head = next.slice(0, k).map((r) => r.signature).join('~');
       if (tail === head) {

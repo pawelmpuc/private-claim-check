@@ -165,6 +165,30 @@ Razem koszt naprawy netto | | | | 5 437,50`;
     expect(netOfItems(est)).toBe(5437.5);
   });
 
+  it('repairs hours from rate and amount, and reads a heading that replaced a description', () => {
+    const est = parseTranscription([
+      `Części zamienne |
+Zderzak przedni | Q | 1 | 1 240,00 | 1 240,00 |
+Reflektor lewy LED | O | 1 | 2 890,00 | 2 890,00 |`,
+      `Zderzak przedni | 1 | 1 240,00 | 1 240,00
+Reflektor lewy LED | 1 | 2 890,00 | 2 890,00
+Blotnik przedni lewy | 1 | 760,00 | 760,00
+ROBOTCZNA | 5 | 95,00 | 323,00
+| 6 | 95,00 | 389,50
+LAKIEROWANIE | 7 | 100,00 | 520,00
+Rabat | | | 0,00`,
+    ]);
+    expect(est.items.map((i) => [i.kind, i.hours, i.total, i.desc])).toEqual([
+      ['part', null, 1240, 'Zderzak przedni'],
+      ['part', null, 2890, 'Reflektor lewy LED'],
+      ['part', null, 760, 'Blotnik przedni lewy'],
+      ['labour', 3.4, 323, 'ROBOTCZNA'],
+      ['labour', 4.1, 389.5, '?'],
+      ['paint', 5.2, 520, 'LAKIEROWANIE'],
+    ]);
+    expect(est.labourRate).toBe(95);
+  });
+
   it('merges pages and keeps the last total', () => {
     const a = normalizeEstimate({ currency: 'PLN', labourRate: 95, statedTotal: 100, items: [{ desc: 'a', kind: 'part', total: 1 }] });
     const b = normalizeEstimate({ currency: 'PLN', statedTotal: 900, items: [{ desc: 'b', kind: 'labour', total: 2 }] });

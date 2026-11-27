@@ -102,7 +102,7 @@ export async function tilesOf(page: PageImage): Promise<PageImage[]> {
   const w = Math.min(width, right + pad) - left;
   const h = Math.min(height, bottom + pad) - top;
 
-  const tileHeight = Math.round(w * 0.5);
+  const tileHeight = Math.round(w * 0.62);
   const overlap = Math.round(tileHeight * 0.14);
   const count = h <= tileHeight ? 1 : Math.ceil((h - overlap) / (tileHeight - overlap));
   const each = Math.ceil((h + (count - 1) * overlap) / count);

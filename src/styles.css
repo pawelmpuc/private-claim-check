@@ -399,6 +399,15 @@ textarea {
 }
 
 /* Step 2 */
+.raw {
+  margin: 10px 0;
+}
+
+.raw summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
 .fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

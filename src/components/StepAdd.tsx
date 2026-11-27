@@ -10,7 +10,7 @@ import { useT } from '../lib/useT';
 interface Props {
   allowCloud: boolean;
   hasEstimate: boolean;
-  onEstimate: (estimate: Estimate) => void;
+  onEstimate: (estimate: Estimate, raw?: string) => void;
   onLog: (entry: Omit<InferenceLogEntry, 'at'>) => void;
   onReset: () => void;
 }
@@ -36,6 +36,7 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
   const begin = () => {
     setError(null);
     setLive('');
+    raw.current = [];
     abort.current = new AbortController();
     return abort.current.signal;
   };
@@ -45,9 +46,11 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
     setLive('');
   };
 
+  const raw = useRef<string[]>([]);
+
   const finish = (estimate: Estimate) => {
     if (estimate.items.length === 0) setError(t('errNoLines'));
-    else onEstimate(estimate);
+    else onEstimate(estimate, raw.current.length > 0 ? raw.current.join('\n\n') : undefined);
   };
 
   const pickFiles = async (files: FileList | null) => {
@@ -69,7 +72,9 @@ export function StepAdd({ allowCloud, hasEstimate, onEstimate, onLog, onReset }:
     let deviceFailed = false;
     if ((await deviceStatus()) === 'available') {
       try {
-        const estimate = parseTranscription(await device());
+        const texts = await device();
+        raw.current.push(...texts);
+        const estimate = parseTranscription(texts);
         onLog({ step: 'read', source: 'on_device', redactions: 0 });
         return estimate;
       } catch (err) {

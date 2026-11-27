@@ -51,6 +51,7 @@ const en = {
   errNoLines: 'No estimate lines were found. Try a sharper photo, or type the lines in yourself.',
 
   reviewHint: 'AI can misread a document. Compare these lines with your estimate and correct anything that is wrong before you rely on the result.',
+  rawRead: 'Show what the on-device model wrote',
   colDesc: 'Line',
   colKind: 'Type',
   colHours: 'Hours',
@@ -188,6 +189,7 @@ const pl: Record<Key, string> = {
   errNoLines: 'Nie znaleziono pozycji kosztorysu. Spróbuj z ostrzejszym zdjęciem albo wpisz pozycje ręcznie.',
 
   reviewHint: 'AI może źle odczytać dokument. Porównaj te pozycje ze swoim kosztorysem i popraw błędy, zanim oprzesz się na wyniku.',
+  rawRead: 'Pokaż, co zapisał model na urządzeniu',
   colDesc: 'Pozycja',
   colKind: 'Rodzaj',
   colHours: 'Godziny',

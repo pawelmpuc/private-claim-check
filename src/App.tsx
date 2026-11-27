@@ -21,6 +21,7 @@ export function App() {
   const [settings, setSettings] = useState<AuditSettings>(() => defaultSettings('EUR'));
   const [deselected, setDeselected] = useState<Set<string>>(new Set());
   const [tier, setTier] = useState<Tier>('realistic');
+  const [rawRead, setRawRead] = useState<string | null>(null);
 
   const refreshDevice = useCallback(() => {
     void deviceStatus().then(setDevice);
@@ -36,7 +37,8 @@ export function App() {
   }, []);
 
   const loadEstimate = useCallback(
-    (next: Estimate) => {
+    (next: Estimate, raw?: string) => {
+      setRawRead(raw ?? null);
       const code = countryForCurrency(next.currency, country);
       setCountry(code);
       setEstimate(next);
@@ -96,7 +98,7 @@ export function App() {
 
         {estimate && (
           <>
-            <StepReview estimate={estimate} onChange={setEstimate} onCurrency={changeCurrency} country={country} onCountry={changeCountry} settings={settings} onSettings={setSettings} />
+            <StepReview estimate={estimate} onChange={setEstimate} onCurrency={changeCurrency} country={country} onCountry={changeCountry} settings={settings} onSettings={setSettings} rawRead={rawRead} />
             <StepFindings estimate={estimate} findings={findings} selected={selected} onToggle={toggle} />
             <StepLetter estimate={estimate} findings={findings} selected={selected} tier={tier} onTier={setTier} allowCloud={allowCloud} onLog={addLog} />
           </>
