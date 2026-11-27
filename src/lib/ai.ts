@@ -103,6 +103,19 @@ export async function nativeDebugToken(): Promise<string> {
   }
 }
 
+/**
+ * Self-test only, Android app only: asks the SDK for one short on-device answer whatever the
+ * status says, and returns what the SDK reported. Used to record why a phone has no model.
+ */
+export async function nativeProbe(): Promise<string> {
+  if (!nativeBridge) return '';
+  try {
+    return (await nativeCall('probe', { model: tuning.cloudModel })).text ?? '';
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
 /** Tells the Android app that the hands-free self-test has finished, so a device-farm run can end. */
 export function nativeSelfTestDone(): void {
   nativeBridge?.post(JSON.stringify({ id: 'selftest', op: 'selfTestDone' }));

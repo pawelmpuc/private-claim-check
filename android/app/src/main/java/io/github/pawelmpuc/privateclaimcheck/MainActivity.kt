@@ -85,7 +85,9 @@ class MainActivity : ComponentActivity() {
             val inTestLab = Settings.System.getString(contentResolver, "firebase.test.lab") == "true"
             val selfTest = inTestLab || intent.action == "com.google.intent.action.TEST_LOOP" || intent.getBooleanExtra("selftest", false)
             if (selfTest) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            val query = if (selfTest) "?selftest" else ""
+            // "selftestWait": how many seconds the self-test keeps asking a freshly reset phone for its model.
+            val wait = intent.getIntExtra("selftestWait", 0)
+            val query = if (selfTest) "?selftest" + (if (wait > 0) "&wait=$wait" else "") else ""
             webView.loadUrl("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/www/index.html$query")
         } else {
             webView.restoreState(savedInstanceState)

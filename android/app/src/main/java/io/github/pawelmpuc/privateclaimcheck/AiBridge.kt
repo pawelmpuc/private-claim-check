@@ -62,6 +62,10 @@ class AiBridge(private val webView: WebView, private val onSelfTestDone: () -> U
                             reply(id) { put("ok", true); put("text", token) }
                         }
                         "generate" -> generate(id, msg)
+                        "probe" -> {
+                            val report = probe(msg.getString("model"))
+                            reply(id) { put("ok", true); put("text", report) }
+                        }
                         else -> throw IllegalArgumentException("unknown op")
                     }
                 } catch (e: Throwable) {
@@ -78,6 +82,21 @@ class AiBridge(private val webView: WebView, private val onSelfTestDone: () -> U
         OnDeviceModelStatus.DOWNLOADABLE -> "downloadable"
         OnDeviceModelStatus.DOWNLOADING -> "downloading"
         else -> "unavailable"
+    }
+
+    /**
+     * Self-test only. Asks for one short on-device answer whatever the status says and
+     * returns what the SDK reported, with the chain of causes, so a device-farm log shows
+     * why a phone has no on-device model. Nothing is sent to the cloud.
+     */
+    private suspend fun probe(modelName: String): String = try {
+        val model = Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
+            modelName = modelName,
+            onDeviceConfig = OnDeviceConfig(mode = InferenceMode.ONLY_ON_DEVICE),
+        )
+        "answered: " + (model.generateContent("Reply with the single word OK.").text ?: "").take(80)
+    } catch (e: Throwable) {
+        generateSequence(e) { it.cause }.take(5).joinToString(" <- ") { "${it.javaClass.name}: ${it.message}" }
     }
 
     /**

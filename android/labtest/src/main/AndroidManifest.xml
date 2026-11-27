@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Runs inside Private Claim Check on a device farm (Firebase Test Lab, "Instrumentation" test). -->
+    <instrumentation
+        android:name=".LabRun"
+        android:label="Private Claim Check: on-device self-test"
+        android:targetPackage="io.github.pawelmpuc.privateclaimcheck" />
+
+    <application android:label="PCC lab run" />
+</manifest>

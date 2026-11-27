@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { deviceStatus, downloadDeviceModel, isNativeApp, nativeSelfTestDone, run } from '../lib/ai';
+import { deviceStatus, downloadDeviceModel, isNativeApp, nativeProbe, nativeSelfTestDone, run } from '../lib/ai';
 import { explainPrompt, inventedFigure } from '../lib/explain';
 import { sampleEstimate } from '../lib/sample';
 
@@ -27,8 +27,17 @@ export function SelfTest() {
     };
     const test = async () => {
       say('Platform', isNativeApp ? 'Android app, Firebase AI Logic Android SDK' : 'Browser, Firebase AI Logic web SDK', null);
+      const began = Date.now();
       let status = await deviceStatus('en');
       say('On-device model', status, status !== 'unavailable');
+      // A phone that was reset a moment ago may need time before its AI service is set up.
+      // `?selftest&wait=600` keeps asking for up to that many seconds.
+      const waitMs = Math.min(Number(new URLSearchParams(location.search).get('wait')) || 0, 3600) * 1000;
+      while (status === 'unavailable' && !stop && Date.now() - began < waitMs) {
+        await new Promise((resolve) => setTimeout(resolve, 20_000));
+        status = await deviceStatus('en');
+        say('On-device model', `${status} after ${Math.round((Date.now() - began) / 1000)} s`, status !== 'unavailable');
+      }
       if (status === 'downloadable' || status === 'downloading') {
         try {
           await downloadDeviceModel((fraction) => say('Download', `${Math.round(fraction * 100)}%`, null));
@@ -41,6 +50,7 @@ export function SelfTest() {
       }
       if (status !== 'available') {
         say('On-device request', 'skipped: the model is not available on this device', null);
+        if (isNativeApp) say('What the SDK reported', await nativeProbe(), null);
         return;
       }
       const prompt = explainPrompt(sampleEstimate(), 'en');

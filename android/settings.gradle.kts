@@ -17,3 +17,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "PrivateClaimCheck"
 include(":app")
+// A tiny helper APK for device farms: it starts the app's on-device self-test and waits for it. Not part of the app.
+include(":labtest")
