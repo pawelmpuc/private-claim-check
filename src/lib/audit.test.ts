@@ -699,6 +699,9 @@ describe('rewording the letter', () => {
     const out = applyPolish(parts, 'I have gone through the estimate you issued for this claim and I cannot accept it as full settlement, for the reasons below.\n---\nPlease pay this amount within 14 days or tell me in writing why you will not. I may have the car assessed independently.');
     expect(out.ok).toBe(true);
     if (out.ok) {
+      expect(out.changed).toBe(true);
+      expect(applyPolish(parts, `${parts.open}\n\n---\n\n${parts.close}`)).toMatchObject({ ok: true, changed: false });
+      expect(polishPrompt(parts, 'en', 'shorter')).toContain('at most two sentences each');
       expect(out.parts.middle).toBe(parts.middle);
       expect(joinLetter(out.parts)).toContain('I have gone through the estimate');
     }

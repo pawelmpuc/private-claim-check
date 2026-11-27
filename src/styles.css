@@ -818,3 +818,8 @@ textarea {
 .live-text {
   color: var(--muted);
 }
+
+.tone-label {
+  align-self: center;
+  font-weight: 600;
+}

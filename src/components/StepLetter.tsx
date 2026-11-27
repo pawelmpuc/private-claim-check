@@ -3,7 +3,7 @@ import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, DeviceTimeoutError, fireb
 import { TIERS, tierTotals } from '../lib/audit';
 import type { Comparison } from '../lib/compare';
 import type { Key } from '../lib/i18n';
-import { applyPolish, fillDetails, joinLetter, letterParts, money, polishPrompt, type LetterDetails } from '../lib/letter';
+import { applyPolish, fillDetails, joinLetter, letterParts, money, polishPrompt, type LetterDetails, type Tone } from '../lib/letter';
 import { redact } from '../lib/redact';
 import type { Estimate, Finding, InferenceLogEntry, Lang, Tier } from '../lib/types';
 import { useT } from '../lib/useT';
@@ -45,18 +45,21 @@ export function StepLetter({ estimate, findings, selected, comparison, tier, onT
     setDiscarded(null);
   }, [draft]);
 
-  const polish = async () => {
+  const polish = async (tone: Tone) => {
     setBusy(true);
     setMessage(null);
     setLive('');
     setDiscarded(null);
     try {
-      const prompt = polishPrompt(parts, letterLang);
+      const prompt = polishPrompt(parts, letterLang, tone);
       const safe = redact(prompt);
       const res = await run({ deviceParts: [prompt], cloudParts: [safe.text], allowCloud, outputLang: letterLang, onText: setLive });
       onLog({ step: 'letter', source: res.source, redactions: res.source === 'in_cloud' ? safe.count : 0, note: res.deviceError ? 'device_failed' : undefined });
       const result = applyPolish(parts, res.text);
-      if (result.ok) {
+      if (result.ok && !result.changed) {
+        setRewrite(null);
+        setMessage({ kind: 'error', text: t('polishSame') });
+      } else if (result.ok) {
         setRewrite({ draft, text: joinLetter(result.parts) });
         setMessage({ kind: 'ok', text: t('polishOk', { where: t(res.source === 'on_device' ? 'srcDevice' : 'srcCloud') }) });
       } else {
@@ -136,9 +139,12 @@ export function StepLetter({ estimate, findings, selected, comparison, tier, onT
 
           <p className="help no-print">{t('polishHelp')}</p>
           <div className="row no-print">
-            <button type="button" className="btn btn-primary" onClick={() => void polish()} disabled={busy || !firebaseConfigured}>
-              {busy ? t('polishing') : t('polish')}
-            </button>
+            <span className="tone-label">{busy ? t('polishing') : t('polish')}</span>
+            {(['firmer', 'friendlier', 'shorter'] as Tone[]).map((tone) => (
+              <button key={tone} type="button" className="btn btn-primary" onClick={() => void polish(tone)} disabled={busy || !firebaseConfigured}>
+                {t(`tone_${tone}` as Key)}
+              </button>
+            ))}
             {rewrite && rewrite.draft === draft && (
               <button type="button" className="btn btn-quiet" onClick={() => setRewrite(null)}>
                 {t('resetLetter')}

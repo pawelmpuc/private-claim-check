@@ -188,7 +188,7 @@ export function fillDetails(letter: string, details: LetterDetails, lang: Lang):
 }
 
 const POLISH_TEXT: Record<Lang, string> = {
-  en: `Rewrite the two paragraphs below. They open and close a letter from a private person to an insurance company about a repair estimate. Make them clear, firm and polite. Write in English.
+  en: `Rewrite the two paragraphs below. They open and close a letter from a private person to an insurance company about a repair estimate. {TONE} Write in English.
 Rules:
 - Keep the meaning of each paragraph.
 - Keep every number exactly as written.
@@ -196,7 +196,7 @@ Rules:
 - Do not add a greeting, a signature or a list.
 - Do not leave blanks to fill in, and do not mention a claim number or a sum of money.
 Return the first paragraph, then a line with only three dashes (---), then the second paragraph. Nothing else.`,
-  pl: `Przeredaguj dwa poniższe akapity. Otwierają i zamykają pismo osoby prywatnej do zakładu ubezpieczeń w sprawie kosztorysu naprawy. Mają być jasne, stanowcze i uprzejme. Pisz po polsku.
+  pl: `Przeredaguj dwa poniższe akapity. Otwierają i zamykają pismo osoby prywatnej do zakładu ubezpieczeń w sprawie kosztorysu naprawy. {TONE} Pisz po polsku.
 Zasady:
 - Zachowaj sens każdego akapitu.
 - Zachowaj każdą liczbę dokładnie tak, jak w tekście.
@@ -210,8 +210,23 @@ Zwróć pierwszy akapit, potem linię zawierającą tylko trzy myślniki (---), 
  * The prompt for improving the wording. Only the opening and the closing paragraph are in it.
  * The numbered points, which hold every amount of the claim, never reach a model.
  */
-export function polishPrompt(parts: LetterParts, lang: Lang): string {
-  return `${POLISH_TEXT[lang]}\n\nFIRST PARAGRAPH:\n${parts.open}\n\nSECOND PARAGRAPH:\n${parts.close}`;
+export type Tone = 'firmer' | 'friendlier' | 'shorter';
+
+const TONES: Record<Lang, Record<Tone, string>> = {
+  en: {
+    firmer: 'Make them firmer and more direct, and still polite: it must be plain that the estimate is not accepted and that an answer in writing is expected.',
+    friendlier: 'Make them warmer and more cooperative, without dropping any request.',
+    shorter: 'Make them shorter: at most two sentences each.',
+  },
+  pl: {
+    firmer: 'Mają być bardziej stanowcze i bezpośrednie, nadal uprzejme: ma być jasne, że kosztorys nie jest akceptowany i że oczekiwana jest odpowiedź na piśmie.',
+    friendlier: 'Mają być cieplejsze i nastawione na współpracę, bez rezygnowania z żadnego żądania.',
+    shorter: 'Mają być krótsze: najwyżej po dwa zdania.',
+  },
+};
+
+export function polishPrompt(parts: LetterParts, lang: Lang, tone: Tone = 'firmer'): string {
+  return `${POLISH_TEXT[lang].replace('{TONE}', TONES[lang][tone])}\n\nFIRST PARAGRAPH:\n${parts.open}\n\nSECOND PARAGRAPH:\n${parts.close}`;
 }
 
 const NUMBER = /\d+(?:[ \u00a0\u202f.,]\d+)*/g;
@@ -242,7 +257,7 @@ export function verifyRewrite(draft: string, rewritten: string): RewriteCheck {
   return { ok: true };
 }
 
-export type PolishResult = { ok: true; parts: LetterParts } | { ok: false; reason: NonNullable<RewriteCheck['reason']> | 'shape'; value?: string };
+export type PolishResult = { ok: true; parts: LetterParts; changed: boolean } | { ok: false; reason: NonNullable<RewriteCheck['reason']> | 'shape'; value?: string };
 
 /** Puts the model's two paragraphs into the letter, if they pass the checks. */
 export function applyPolish(parts: LetterParts, answer: string): PolishResult {
@@ -263,5 +278,6 @@ export function applyPolish(parts: LetterParts, answer: string): PolishResult {
   const figures = (text: string): string[] => text.match(/\d+/g) ?? [];
   const lost = figures(before).find((n) => !figures(after).includes(n));
   if (lost || figures(before).join(' ') !== figures(after).join(' ')) return { ok: false, reason: 'number_missing', value: lost ?? figures(before)[0] };
-  return { ok: true, parts: { ...parts, open, close } };
+  const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
+  return { ok: true, parts: { ...parts, open, close }, changed: flat(after) !== flat(before) };
 }
