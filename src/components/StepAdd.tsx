@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { CloudNotAllowedError, deviceStatus, DeviceTimeoutError, firebaseConfigured, imagePart, NotConfiguredError, run, tuning } from '../lib/ai';
+import { CloudBusyError, CloudNotAllowedError, deviceStatus, DeviceTimeoutError, firebaseConfigured, imagePart, NotConfiguredError, run, tuning } from '../lib/ai';
 import { emptyItem, mergeEstimates, normalizeEstimate, parseDocumentText, parseModelJson, parsePastedText, READ_PROMPT, TRANSCRIBE_PROMPT, TRANSCRIBE_TEXT_PROMPT } from '../lib/extract';
 import { filesToPages, MAX_PAGES, tilesOf, type PageImage } from '../lib/files';
 import { sumMismatch } from '../lib/audit';
@@ -39,6 +39,7 @@ export function StepAdd({ variant = 'estimate', allowCloud, hasEstimate, fallbac
     if (err instanceof DeviceTimeoutError) setError(t('errDeviceTimeout', { s: tuning.deviceTimeoutS }));
     else if (err instanceof CloudNotAllowedError) setError(t('errCloudNotAllowed'));
     else if (err instanceof NotConfiguredError) setError(t('errNotConfigured'));
+    else if (err instanceof CloudBusyError) setError(t('errCloudBusy'));
     else setError(t('errGeneric', { msg: err instanceof Error ? err.message : String(err) }));
   };
 

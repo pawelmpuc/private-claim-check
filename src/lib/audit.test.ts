@@ -732,10 +732,41 @@ describe('remote settings', () => {
   it('takes a sound value and ignores a broken one', async () => {
     const { applyRemote, tuning } = await import('./ai');
     applyRemote('gemini-3.5-flash', 120);
-    expect(tuning).toEqual({ cloudModel: 'gemini-3.5-flash', deviceTimeoutS: 120 });
+    expect(tuning).toEqual({ cloudModel: 'gemini-3.5-flash', cloudModelBackup: 'gemini-3.1-flash-lite', deviceTimeoutS: 120 });
     applyRemote('', 5);
-    applyRemote('drop table', Number.NaN);
-    expect(tuning).toEqual({ cloudModel: 'gemini-3.5-flash', deviceTimeoutS: 120 });
+    applyRemote('drop table', Number.NaN, 'also; bad');
+    expect(tuning).toEqual({ cloudModel: 'gemini-3.5-flash', cloudModelBackup: 'gemini-3.1-flash-lite', deviceTimeoutS: 120 });
+    applyRemote('gemini-3.5-flash-lite', 90, 'gemini-3.1-flash-lite');
+  });
+});
+
+describe('cloud model with a daily allowance', () => {
+  it('tells an exhausted allowance from other failures', async () => {
+    const { isQuotaError } = await import('./ai');
+    expect(isQuotaError(new Error('[429 ] You exceeded your current quota, please check your plan'))).toBe(true);
+    expect(isQuotaError(new Error('RESOURCE_EXHAUSTED: Resource has been exhausted'))).toBe(true);
+    expect(isQuotaError(new Error('Failed to fetch'))).toBe(false);
+    expect(isQuotaError(new Error('App Check token is invalid'))).toBe(false);
+  });
+
+  it('sends the request to the backup model when the first one is used up', async () => {
+    const { withBackupModel, tuning } = await import('./ai');
+    const asked: string[] = [];
+    const answer = await withBackupModel(async (name) => {
+      asked.push(name);
+      if (name === tuning.cloudModel) throw new Error('429 quota exceeded');
+      return 'ok';
+    });
+    expect(answer).toBe('ok');
+    expect(asked).toEqual([tuning.cloudModel, tuning.cloudModelBackup]);
+  });
+
+  it('says so when both models are used up, and does not retry other failures', async () => {
+    const { withBackupModel, CloudBusyError } = await import('./ai');
+    await expect(withBackupModel(async () => { throw new Error('RESOURCE_EXHAUSTED'); })).rejects.toBeInstanceOf(CloudBusyError);
+    let calls = 0;
+    await expect(withBackupModel(async () => { calls++; throw new Error('Failed to fetch'); })).rejects.toThrow('Failed to fetch');
+    expect(calls).toBe(1);
   });
 });
 

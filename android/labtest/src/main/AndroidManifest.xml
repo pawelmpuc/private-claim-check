@@ -3,7 +3,7 @@
 
     <!-- Runs inside Private Claim Check on a device farm (Firebase Test Lab, "Instrumentation" test). -->
     <instrumentation
-        android:name=".LabRun"
+        android:name="${runner}"
         android:label="Private Claim Check: on-device self-test"
         android:targetPackage="io.github.pawelmpuc.privateclaimcheck" />
 

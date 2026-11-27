@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { deviceStatus, downloadDeviceModel, isNativeApp, nativeProbe, nativeSelfTestDone, run } from '../lib/ai';
+import { cloudProbe, deviceStatus, downloadDeviceModel, isNativeApp, nativeProbe, nativeSelfTestDone, run, tuning } from '../lib/ai';
 import { explainPrompt, inventedFigure } from '../lib/explain';
 import { sampleEstimate } from '../lib/sample';
 
@@ -80,6 +80,15 @@ export function SelfTest() {
         say('Cloud answer', res.text.trim(), null);
       } catch (err) {
         say('Cloud request', `failed: ${err instanceof Error ? err.message : String(err)}`, false);
+      }
+      // The backup model takes over when the first one's daily allowance is used up. Check that it answers.
+      const backupStarted = Date.now();
+      try {
+        const text = await cloudProbe(tuning.cloudModelBackup, prompt);
+        const invented = inventedFigure(prompt, text);
+        say('Backup cloud model', `${tuning.cloudModelBackup} answered in ${Math.round((Date.now() - backupStarted) / 1000)} s; figure check ${invented ? `rejected ${invented}` : 'passed'}`, !invented);
+      } catch (err) {
+        say('Backup cloud model', `${tuning.cloudModelBackup} failed: ${err instanceof Error ? err.message : String(err)}`, false);
       }
     };
     const withCloud = new URLSearchParams(location.search).has('cloud');

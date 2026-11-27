@@ -24,8 +24,8 @@ import java.util.List;
  * logcat under the tag "PCCLAB"; the app's own lines are under "PCC".
  */
 public class LabRun extends Instrumentation {
-    private static final String TAG = "PCCLAB";
-    private static final String APP = "io.github.pawelmpuc.privateclaimcheck";
+    static final String TAG = "PCCLAB";
+    static final String APP = "io.github.pawelmpuc.privateclaimcheck";
     private static final String AICORE = "com.google.android.aicore";
 
     @Override
@@ -144,7 +144,7 @@ public class LabRun extends Instrumentation {
         finish(Activity.RESULT_OK, result);
     }
 
-    private static void say(String line) {
+    static void say(String line) {
         Log.i(TAG, line);
     }
 
@@ -154,7 +154,7 @@ public class LabRun extends Instrumentation {
     }
 
     /** Runs a command the way `adb shell` would. No pipes: the output is filtered here. */
-    private String sh(String command) {
+    String sh(String command) {
         StringBuilder out = new StringBuilder();
         try (ParcelFileDescriptor.AutoCloseInputStream in = new ParcelFileDescriptor.AutoCloseInputStream(getUiAutomation().executeShellCommand(command));
              BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
@@ -166,13 +166,13 @@ public class LabRun extends Instrumentation {
         return out.toString();
     }
 
-    private static List<String> lines(String text) {
+    static List<String> lines(String text) {
         List<String> all = new ArrayList<>();
         for (String line : text.split("\n")) if (!line.trim().isEmpty()) all.add(line);
         return all;
     }
 
-    private static List<String> grep(String text, String... needles) {
+    static List<String> grep(String text, String... needles) {
         List<String> found = new ArrayList<>();
         for (String line : lines(text)) {
             for (String needle : needles) {

@@ -17,6 +17,8 @@ export type DeviceStatus = 'available' | 'downloadable' | 'downloading' | 'unava
 export class NotConfiguredError extends Error {}
 export class CloudNotAllowedError extends Error {}
 export class DeviceTimeoutError extends Error {}
+/** The cloud model's daily allowance is used up, on the first model and on the backup. */
+export class CloudBusyError extends Error {}
 
 /**
  * Two settings can be changed from Firebase Remote Config without a new release:
@@ -24,11 +26,37 @@ export class DeviceTimeoutError extends Error {}
  * model may take to produce its first text before the app gives up on it.
  * The values below are used until Remote Config answers, and whenever it does not.
  */
-export const tuning = { cloudModel: 'gemini-3.5-flash-lite', deviceTimeoutS: 90 };
+export const tuning = { cloudModel: 'gemini-3.5-flash-lite', cloudModelBackup: 'gemini-3.1-flash-lite', deviceTimeoutS: 90 };
+
+/**
+ * A cloud model has a daily allowance of requests. When the first model answers that its
+ * allowance is used up, the request is sent once more to the backup model, which has an
+ * allowance of its own.
+ */
+export function isQuotaError(err: unknown): boolean {
+  const text = err instanceof Error ? err.message : String(err);
+  return /\b429\b|RESOURCE_EXHAUSTED|quota|rate limit/i.test(text);
+}
+
+export async function withBackupModel<T>(call: (modelName: string) => Promise<T>): Promise<T> {
+  try {
+    return await call(tuning.cloudModel);
+  } catch (err) {
+    if (!isQuotaError(err)) throw err;
+    if (tuning.cloudModelBackup === tuning.cloudModel) throw new CloudBusyError(err instanceof Error ? err.message : String(err));
+    try {
+      return await call(tuning.cloudModelBackup);
+    } catch (second) {
+      if (isQuotaError(second)) throw new CloudBusyError(second instanceof Error ? second.message : String(second));
+      throw second;
+    }
+  }
+}
 
 /** Remote values are checked before use, so a typo in the console cannot break the app. */
-export function applyRemote(cloudModel: string, deviceTimeoutS: number): void {
+export function applyRemote(cloudModel: string, deviceTimeoutS: number, cloudModelBackup = ''): void {
   if (/^gemini-[a-z0-9.-]{3,40}$/.test(cloudModel)) tuning.cloudModel = cloudModel;
+  if (/^gemini-[a-z0-9.-]{3,40}$/.test(cloudModelBackup)) tuning.cloudModelBackup = cloudModelBackup;
   if (Number.isFinite(deviceTimeoutS) && deviceTimeoutS >= 30 && deviceTimeoutS <= 300) tuning.deviceTimeoutS = Math.round(deviceTimeoutS);
 }
 
@@ -36,9 +64,9 @@ function loadRemoteConfig(app: FirebaseApp): void {
   try {
     const rc = getRemoteConfig(app);
     rc.settings.minimumFetchIntervalMillis = 60 * 60 * 1000;
-    rc.defaultConfig = { cloud_model: tuning.cloudModel, device_timeout_s: tuning.deviceTimeoutS };
+    rc.defaultConfig = { cloud_model: tuning.cloudModel, cloud_model_backup: tuning.cloudModelBackup, device_timeout_s: tuning.deviceTimeoutS };
     void fetchAndActivate(rc)
-      .then(() => applyRemote(getString(rc, 'cloud_model'), getNumber(rc, 'device_timeout_s')))
+      .then(() => applyRemote(getString(rc, 'cloud_model'), getNumber(rc, 'device_timeout_s'), getString(rc, 'cloud_model_backup')))
       .catch(() => undefined);
   } catch {
     // Remote Config needs IndexedDB. Without it the defaults stay in force.
@@ -186,13 +214,13 @@ export async function deviceStatus(outputLang = 'en'): Promise<DeviceStatus> {
   }
 }
 
-function model(mode: InferenceMode, outputLang = 'en', cloudJsonSchema?: object) {
+function model(mode: InferenceMode, outputLang = 'en', cloudJsonSchema?: object, cloudModel = tuning.cloudModel) {
   return getGenerativeModel(getAi(), {
     mode,
     onDeviceParams: { createOptions: deviceIo(outputLang) },
     inCloudParams: {
       // JSON mode keeps the reply parseable.
-      model: tuning.cloudModel,
+      model: cloudModel,
       generationConfig: cloudJsonSchema ? { responseMimeType: 'application/json', temperature: 0 } : { temperature: 0.3 },
     },
   });
@@ -287,12 +315,26 @@ export async function run(req: RunRequest): Promise<RunResult> {
     throw new CloudNotAllowedError(deviceError ?? 'The on-device model is not available.');
   }
   if (nativeBridge) {
-    const done = await nativeCall('generate', { mode: 'cloud', model: tuning.cloudModel, json: Boolean(req.cloudJson), parts: nativeParts(req.cloudParts) }, undefined, req.signal);
+    const done = await withBackupModel((modelName) =>
+      nativeCall('generate', { mode: 'cloud', model: modelName, json: Boolean(req.cloudJson), parts: nativeParts(req.cloudParts) }, undefined, req.signal),
+    );
     return { text: done.text ?? '', source: done.source === 'on_device' ? 'on_device' : 'in_cloud', deviceError };
   }
-  const result = await model(InferenceMode.ONLY_IN_CLOUD, lang, req.cloudJson ? {} : undefined).generateContent(req.cloudParts, options);
+  const result = await withBackupModel((modelName) =>
+    model(InferenceMode.ONLY_IN_CLOUD, lang, req.cloudJson ? {} : undefined, modelName).generateContent(req.cloudParts, options),
+  );
   const reported = result.response.inferenceSource;
   return { text: result.response.text(), source: reported === 'on_device' ? 'on_device' : 'in_cloud', deviceError };
+}
+
+/**
+ * Self-test only: one short text request to a named cloud model, to show that the backup
+ * model answers too. The caller passes nothing but the built-in sample.
+ */
+export async function cloudProbe(modelName: string, prompt: string): Promise<string> {
+  if (nativeBridge) return (await nativeCall('generate', { mode: 'cloud', model: modelName, json: false, parts: [{ text: prompt }] })).text ?? '';
+  const result = await model(InferenceMode.ONLY_IN_CLOUD, 'en', undefined, modelName).generateContent([prompt]);
+  return result.response.text();
 }
 
 export function imagePart(base64: string, mimeType: string): Part {

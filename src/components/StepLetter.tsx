@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CloudNotAllowedError, DeviceTimeoutError, firebaseConfigured, NotConfiguredError, run, tuning } from '../lib/ai';
+import { CloudBusyError, CloudNotAllowedError, DeviceTimeoutError, firebaseConfigured, NotConfiguredError, run, tuning } from '../lib/ai';
 import { TIERS, tierTotals } from '../lib/audit';
 import type { Comparison } from '../lib/compare';
 import type { Key } from '../lib/i18n';
@@ -76,6 +76,7 @@ export function StepLetter({ estimate, findings, selected, comparison, tier, onT
       if (err instanceof DeviceTimeoutError) setMessage({ kind: 'error', text: t('errDeviceTimeout', { s: tuning.deviceTimeoutS }) });
       else if (err instanceof CloudNotAllowedError) setMessage({ kind: 'error', text: t('errCloudNotAllowed') });
       else if (err instanceof NotConfiguredError) setMessage({ kind: 'error', text: t('errNotConfigured') });
+      else if (err instanceof CloudBusyError) setMessage({ kind: 'error', text: t('errCloudBusy') });
       else setMessage({ kind: 'error', text: t('errGeneric', { msg: err instanceof Error ? err.message : String(err) }) });
     } finally {
       setBusy(false);

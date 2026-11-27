@@ -14,6 +14,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        // LabRun runs the hands-free self-test. Build with -Pdemo for LabDemo, which walks through the app's screens.
+        manifestPlaceholders["runner"] = if (project.hasProperty("demo")) ".LabDemo" else ".LabRun"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

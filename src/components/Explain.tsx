@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CloudNotAllowedError, DeviceTimeoutError, firebaseConfigured, NotConfiguredError, run, tuning } from '../lib/ai';
+import { CloudBusyError, CloudNotAllowedError, DeviceTimeoutError, firebaseConfigured, NotConfiguredError, run, tuning } from '../lib/ai';
 import { explainPrompt, inventedFigure } from '../lib/explain';
 import type { Estimate, InferenceLogEntry } from '../lib/types';
 import { useT } from '../lib/useT';
@@ -41,6 +41,7 @@ export function Explain({ estimate, allowCloud, onLog }: Props) {
       if (err instanceof DeviceTimeoutError) setError(t('errDeviceTimeout', { s: tuning.deviceTimeoutS }));
       else if (err instanceof CloudNotAllowedError) setError(t('errCloudNotAllowed'));
       else if (err instanceof NotConfiguredError) setError(t('errNotConfigured'));
+      else if (err instanceof CloudBusyError) setError(t('errCloudBusy'));
       else setError(t('errGeneric', { msg: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBusy(false);

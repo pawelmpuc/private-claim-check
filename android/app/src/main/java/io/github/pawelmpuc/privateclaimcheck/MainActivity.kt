@@ -2,10 +2,12 @@ package io.github.pawelmpuc.privateclaimcheck
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.View
 import android.view.WindowManager
 import android.webkit.ConsoleMessage
 import android.webkit.ValueCallback
@@ -14,9 +16,13 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
 
 /** Shows the same app as the web version, from files packed into the APK, and gives it the native AI bridge. */
@@ -74,7 +80,23 @@ class MainActivity : ComponentActivity() {
         bridge = AiBridge(webView) { webView.postDelayed({ finish() }, 20_000) }
         // The bridge is only exposed to the pages packed into the APK: nothing else is ever loaded in this WebView.
         webView.addJavascriptInterface(bridge, "PccNative")
-        setContentView(webView)
+        // Android 15 and newer draw every app under the status bar and the gesture bar. Keep the page
+        // clear of both: a strip in the colour of the page's header on top, the page's own colour below.
+        val strip = View(this).apply { setBackgroundColor(Color.parseColor("#16212B")) }
+        val root = FrameLayout(this).apply {
+            setBackgroundColor(Color.parseColor("#F4F2EC"))
+            addView(webView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            addView(strip, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 0))
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime())
+            strip.layoutParams = (strip.layoutParams as FrameLayout.LayoutParams).apply { height = bars.top }
+            webView.layoutParams = (webView.layoutParams as FrameLayout.LayoutParams).apply { setMargins(bars.left, bars.top, bars.right, bars.bottom) }
+            WindowInsetsCompat.CONSUMED
+        }
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowCompat.getInsetsController(window, root).isAppearanceLightStatusBars = false
+        setContentView(root)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) webView.goBack() else finish()
@@ -83,7 +105,9 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             // In Firebase Test Lab nobody taps the screen: open the hands-free on-device self-test.
             val inTestLab = Settings.System.getString(contentResolver, "firebase.test.lab") == "true"
-            val selfTest = inTestLab || intent.action == "com.google.intent.action.TEST_LOOP" || intent.getBooleanExtra("selftest", false)
+            // "demo": a device-farm run that wants the ordinary screen, to walk through it and record it.
+            val demo = intent.getBooleanExtra("demo", false)
+            val selfTest = !demo && (inTestLab || intent.action == "com.google.intent.action.TEST_LOOP" || intent.getBooleanExtra("selftest", false))
             if (selfTest) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             // "selftestWait": how many seconds the self-test keeps asking a freshly reset phone for its model.
             val wait = intent.getIntExtra("selftestWait", 0)

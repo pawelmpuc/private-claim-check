@@ -17,6 +17,7 @@ import com.google.firebase.ai.ondevice.OnDeviceModelStatus
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.PublicPreviewAPI
+import com.google.firebase.ai.type.QuotaExceededException
 import com.google.firebase.ai.type.generationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,7 +70,9 @@ class AiBridge(private val webView: WebView, private val onSelfTestDone: () -> U
                         else -> throw IllegalArgumentException("unknown op")
                     }
                 } catch (e: Throwable) {
-                    reply(id) { put("ok", false); put("error", e.message ?: e.javaClass.simpleName) }
+                    // The page sends the request to the backup cloud model when it sees this word.
+                    val quota = if (e is QuotaExceededException) "RESOURCE_EXHAUSTED: " else ""
+                    reply(id) { put("ok", false); put("error", quota + (e.message ?: e.javaClass.simpleName)) }
                 } finally {
                     running.remove(id)
                 }
