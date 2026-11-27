@@ -127,8 +127,26 @@ export function quoteBreakdown(comparison: Comparison, lang: Lang, fmt: (n: numb
   return out.join('\n');
 }
 
+/**
+ * The letter in five pieces. `open` and `close` are prose without figures from the audit;
+ * they are the only pieces a model is ever asked to reword. `middle` holds every amount.
+ */
+export interface LetterParts {
+  before: string;
+  open: string;
+  middle: string;
+  close: string;
+  after: string;
+}
+
+export const joinLetter = (p: LetterParts) => [p.before, p.open, p.middle, p.close, p.after].filter(Boolean).join('\n\n');
+
 /** Builds the letter from the audit result alone. Every amount in it comes from the audit, not from a model. */
 export function draftLetter(estimate: Estimate, findings: Finding[], selected: Set<string>, tier: Tier, lang: Lang, comparison: Comparison | null = null): string {
+  return joinLetter(letterParts(estimate, findings, selected, tier, lang, comparison));
+}
+
+export function letterParts(estimate: Estimate, findings: Finding[], selected: Set<string>, tier: Tier, lang: Lang, comparison: Comparison | null = null): LetterParts {
   const chosen = findings.filter((f) => selected.has(f.id));
   const withAmount = chosen.filter((f) => f.amounts && f.amounts[tier] > 0);
   const questions = chosen.filter((f) => !f.amounts);
@@ -146,16 +164,17 @@ export function draftLetter(estimate: Estimate, findings: Finding[], selected: S
   if (upliftVat > 0 && vat) points.push(frame.vatUplift(fmt(upliftVat), num(vat.params.rate, lang)));
   const total = withAmount.reduce((s, f) => s + f.amounts![tier], 0) + upliftVat;
 
-  const parts: string[] = [frame.head, frame.open];
+  const [salute, open] = frame.open.split('\n\n');
+  const [close, sign] = frame.close.split('\n\n');
+  const middle: string[] = [];
   if (points.length > 0) {
-    parts.push(points.map((p, n) => `${n + 1}. ${p}`).join('\n'));
-    parts.push(frame.total(fmt(Math.round((total + Number.EPSILON) * 100) / 100)));
+    middle.push(points.map((p, n) => `${n + 1}. ${p}`).join('\n'));
+    middle.push(frame.total(fmt(Math.round((total + Number.EPSILON) * 100) / 100)));
   }
   if (questions.length > 0) {
-    parts.push(`${frame.questionsHead}\n${questions.map((f) => `- ${POINTS[lang][f.id](f, '', '', m)}`).join('\n')}`);
+    middle.push(`${frame.questionsHead}\n${questions.map((f) => `- ${POINTS[lang][f.id](f, '', '', m)}`).join('\n')}`);
   }
-  parts.push(frame.close);
-  return parts.join('\n\n');
+  return { before: `${frame.head}\n\n${salute}`, open, middle: middle.join('\n\n'), close, after: sign };
 }
 
 export function fillDetails(letter: string, details: LetterDetails, lang: Lang): string {
@@ -168,28 +187,30 @@ export function fillDetails(letter: string, details: LetterDetails, lang: Lang):
   return out;
 }
 
-export const POLISH_PROMPT: Record<Lang, string> = {
-  en: `Rewrite the letter below so that it reads as a clear, firm and polite letter from a private person to an insurance company. Write in English.
+const POLISH_TEXT: Record<Lang, string> = {
+  en: `Rewrite the two paragraphs below. They open and close a letter from a private person to an insurance company about a repair estimate. Make them clear, firm and polite. Write in English.
 Rules:
-- Keep every number and every amount exactly as written.
-- Keep every placeholder in square brackets exactly as written.
-- Keep the numbered points and their order.
-- Do not add facts, amounts, dates, laws or threats that are not in the letter.
-Return only the letter.
-
-LETTER:
-`,
-  pl: `Przeredaguj poniższe pismo tak, aby było jasnym, stanowczym i uprzejmym pismem osoby prywatnej do zakładu ubezpieczeń. Pisz po polsku.
+- Keep the meaning of each paragraph.
+- Keep every number exactly as written.
+- Do not add facts, amounts, dates, laws or threats.
+- Do not add a greeting, a signature or a list.
+Return the first paragraph, then a line with only three dashes (---), then the second paragraph. Nothing else.`,
+  pl: `Przeredaguj dwa poniższe akapity. Otwierają i zamykają pismo osoby prywatnej do zakładu ubezpieczeń w sprawie kosztorysu naprawy. Mają być jasne, stanowcze i uprzejme. Pisz po polsku.
 Zasady:
-- Zachowaj każdą liczbę i każdą kwotę dokładnie tak, jak w piśmie.
-- Zachowaj każdy znacznik w nawiasach kwadratowych dokładnie tak, jak w piśmie.
-- Zachowaj punkty numerowane i ich kolejność.
-- Nie dodawaj faktów, kwot, dat, przepisów ani gróźb, których nie ma w piśmie.
-Zwróć wyłącznie treść pisma.
-
-PISMO:
-`,
+- Zachowaj sens każdego akapitu.
+- Zachowaj każdą liczbę dokładnie tak, jak w tekście.
+- Nie dodawaj faktów, kwot, dat, przepisów ani gróźb.
+- Nie dodawaj powitania, podpisu ani wyliczeń.
+Zwróć pierwszy akapit, potem linię zawierającą tylko trzy myślniki (---), potem drugi akapit. Nic więcej.`,
 };
+
+/**
+ * The prompt for improving the wording. Only the opening and the closing paragraph are in it.
+ * The numbered points, which hold every amount of the claim, never reach a model.
+ */
+export function polishPrompt(parts: LetterParts, lang: Lang): string {
+  return `${POLISH_TEXT[lang]}\n\nFIRST PARAGRAPH:\n${parts.open}\n\nSECOND PARAGRAPH:\n${parts.close}`;
+}
 
 const NUMBER = /\d+(?:[ \u00a0\u202f.,]\d+)*/g;
 const numbersOf = (text: string) => (text.match(NUMBER) ?? []).map((raw) => ({ raw, digits: raw.replace(/\D/g, '') }));
@@ -217,4 +238,19 @@ export function verifyRewrite(draft: string, rewritten: string): RewriteCheck {
   const lost = tagsOf(draft).find((t) => !tags.has(t));
   if (lost) return { ok: false, reason: 'placeholder_missing', value: lost };
   return { ok: true };
+}
+
+export type PolishResult = { ok: true; parts: LetterParts } | { ok: false; reason: NonNullable<RewriteCheck['reason']> | 'shape'; value?: string };
+
+/** Puts the model's two paragraphs into the letter, if they pass the checks. */
+export function applyPolish(parts: LetterParts, answer: string): PolishResult {
+  const pieces = answer
+    .replace(/^\s*(FIRST|SECOND) PARAGRAPH:\s*/gim, '')
+    .split(/\n\s*-{3,}\s*\n/)
+    .map((piece) => piece.trim());
+  if (pieces.length !== 2 || pieces.some((piece) => piece.length < 20 || /\n\s*[-*\d]+[.)]?\s/.test(piece) || /\[/.test(piece))) return { ok: false, reason: 'shape' };
+  const [open, close] = pieces.map((piece) => piece.replace(/\s*\n\s*/g, ' '));
+  const check = verifyRewrite(`${parts.open}\n${parts.close}`, `${open}\n${close}`);
+  if (!check.ok) return { ok: false, reason: check.reason ?? 'number_added', value: check.value };
+  return { ok: true, parts: { ...parts, open, close } };
 }

@@ -3,7 +3,7 @@ import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, DeviceTimeoutError, fireb
 import { TIERS, tierTotals } from '../lib/audit';
 import type { Comparison } from '../lib/compare';
 import type { Key } from '../lib/i18n';
-import { draftLetter, fillDetails, money, POLISH_PROMPT, verifyRewrite, type LetterDetails } from '../lib/letter';
+import { applyPolish, fillDetails, joinLetter, letterParts, money, polishPrompt, type LetterDetails } from '../lib/letter';
 import { redact } from '../lib/redact';
 import type { Estimate, Finding, InferenceLogEntry, Lang, Tier } from '../lib/types';
 import { useT } from '../lib/useT';
@@ -33,7 +33,8 @@ export function StepLetter({ estimate, findings, selected, comparison, tier, onT
   const [letterLang, setLetterLang] = useState<Lang>(lang);
   useEffect(() => setLetterLang(lang), [lang]);
 
-  const draft = useMemo(() => draftLetter(estimate, findings, selected, tier, letterLang, comparison), [estimate, findings, selected, tier, letterLang, comparison]);
+  const parts = useMemo(() => letterParts(estimate, findings, selected, tier, letterLang, comparison), [estimate, findings, selected, tier, letterLang, comparison]);
+  const draft = useMemo(() => joinLetter(parts), [parts]);
   const totals = tierTotals(findings, selected);
   // A rewrite is only valid for the exact draft it was made from.
   const body = rewrite && rewrite.draft === draft ? rewrite.text : draft;
@@ -50,19 +51,18 @@ export function StepLetter({ estimate, findings, selected, comparison, tier, onT
     setLive('');
     setDiscarded(null);
     try {
-      const prompt = POLISH_PROMPT[letterLang] + draft;
+      const prompt = polishPrompt(parts, letterLang);
       const safe = redact(prompt);
       const res = await run({ deviceParts: [prompt], cloudParts: [safe.text], allowCloud, outputLang: letterLang, onText: setLive });
       onLog({ step: 'letter', source: res.source, redactions: res.source === 'in_cloud' ? safe.count : 0, note: res.deviceError ? 'device_failed' : undefined });
-      const candidate = res.text.trim();
-      const check = verifyRewrite(draft, candidate);
-      if (check.ok) {
-        setRewrite({ draft, text: candidate });
+      const result = applyPolish(parts, res.text);
+      if (result.ok) {
+        setRewrite({ draft, text: joinLetter(result.parts) });
         setMessage({ kind: 'ok', text: t('polishOk', { where: t(res.source === 'on_device' ? 'srcDevice' : 'srcCloud') }) });
       } else {
         setRewrite(null);
-        setDiscarded(candidate);
-        setMessage({ kind: 'error', text: t(`polishRejected_${check.reason ?? 'number_added'}` as Key, { value: check.value ?? '' }) });
+        setDiscarded(res.text.trim());
+        setMessage({ kind: 'error', text: t(`polishRejected_${result.reason}` as Key, { value: result.value ?? '' }) });
       }
     } catch (err) {
       if (err instanceof DeviceTimeoutError) setMessage({ kind: 'error', text: t('errDeviceTimeout', { s: DEVICE_START_TIMEOUT_S }) });
@@ -134,6 +134,7 @@ export function StepLetter({ estimate, findings, selected, comparison, tier, onT
 
           <textarea className="letter" rows={22} value={text} onChange={(e) => setText(e.target.value)} spellCheck />
 
+          <p className="help no-print">{t('polishHelp')}</p>
           <div className="row no-print">
             <button type="button" className="btn btn-primary" onClick={() => void polish()} disabled={busy || !firebaseConfigured}>
               {busy ? t('polishing') : t('polish')}

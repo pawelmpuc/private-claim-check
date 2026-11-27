@@ -120,6 +120,7 @@ export function mergeEstimates(pages: Estimate[]): Estimate {
     // The grand total is normally the last total printed.
     statedTotal: totals.length > 0 ? totals[totals.length - 1] : null,
     items: pages.flatMap((p) => p.items),
+    details: pages.some((p) => p.details) ? pages.flatMap((p) => p.details ?? []) : undefined,
   };
 }
 

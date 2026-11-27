@@ -23,6 +23,11 @@ export interface Estimate {
   /** Total printed on the estimate, before VAT where the document says so. */
   statedTotal: number | null;
   items: EstimateItem[];
+  /**
+   * Descriptions of the detail lines, kept when the amounts come from the totals block.
+   * They say what work the estimate covers; they carry no amounts.
+   */
+  details?: string[];
 }
 
 export type Tier = 'cautious' | 'realistic' | 'optimistic';

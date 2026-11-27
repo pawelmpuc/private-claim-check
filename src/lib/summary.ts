@@ -51,6 +51,7 @@ export function parseSummary(text: string, fallbackCurrency = 'EUR'): Summary | 
   let jcBase = 10;
   let pendingLabour: { hours: number; rate: number } | null = null;
   let n = 0;
+  const details: string[] = [];
 
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.replace(/\.{3,}/g, ' | ').replace(/-{3,}/g, ' ').trim();
@@ -61,6 +62,12 @@ export function parseSummary(text: string, fallbackCurrency = 'EUR'): Summary | 
     if (jc) pendingLabour = { hours: Number(jc[1]) / jcBase, rate: parseNumber(jc[2]) ?? 0 };
 
     const cells = line.split('|').map((c) => c.trim()).filter(Boolean);
+    // A numbered detail line: keep what it is about, not its figures.
+    if (items.length === 0 && /^\d{1,3}$/.test(cells[0] ?? '') && cells.length >= 3) {
+      const words = cells.slice(1).filter((c) => /\p{L}{4,}/u.test(c) && !/^[A-Z0-9/&'* -]{1,8}$/.test(c));
+      const longest = words.sort((a, b) => b.length - a.length)[0];
+      if (longest) details.push(longest);
+    }
     // A row of the block ends in an amount. The label may share its cell with a rate: "VAT 23.00 %".
     if (/^[IVX]{1,4}\.?$/.test(cells[0] ?? '')) cells.shift();
     const labelCell = unspace(cells[0] ?? '');
@@ -143,6 +150,7 @@ export function parseSummary(text: string, fallbackCurrency = 'EUR'): Summary | 
       paintRate: rateOf('paint'),
       statedTotal: stated,
       items: items.map(({ role: _role, ...item }) => item),
+      details: details.length > 0 ? details : undefined,
     },
   };
 }

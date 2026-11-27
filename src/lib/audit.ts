@@ -149,14 +149,19 @@ export function audit(estimate: Estimate, settings: AuditSettings, comparison: C
     findings.push({ id: 'alternativeParts', amounts: null, params: { count: alternative.length }, itemIds: alternative.map((i) => i.id) });
   }
 
+  // With a totals-block estimate the detail lines say what is replaced; they have no kind.
+  const details = estimate.details ?? [];
+  const mentions = (re: RegExp) => items.some((i) => re.test(i.desc)) || details.some((d) => re.test(d));
   const adas = items.filter((i) => i.kind === 'part' && ADAS_PART.test(i.desc));
-  if (adas.length > 0 && !items.some((i) => CALIBRATION.test(i.desc))) {
-    findings.push({ id: 'missingCalibration', amounts: null, params: { count: adas.length }, itemIds: adas.map((i) => i.id) });
+  const adasCount = adas.length + details.filter((d) => ADAS_PART.test(d)).length;
+  if (adasCount > 0 && !mentions(CALIBRATION)) {
+    findings.push({ id: 'missingCalibration', amounts: null, params: { count: adasCount }, itemIds: adas.map((i) => i.id) });
   }
 
   const suspension = items.filter((i) => i.kind === 'part' && SUSPENSION_PART.test(i.desc));
-  if (suspension.length > 0 && !items.some((i) => ALIGNMENT.test(i.desc))) {
-    findings.push({ id: 'missingAlignment', amounts: null, params: { count: suspension.length }, itemIds: suspension.map((i) => i.id) });
+  const suspensionCount = suspension.length + details.filter((d) => SUSPENSION_PART.test(d)).length;
+  if (suspensionCount > 0 && !mentions(ALIGNMENT)) {
+    findings.push({ id: 'missingAlignment', amounts: null, params: { count: suspensionCount }, itemIds: suspension.map((i) => i.id) });
   }
 
   if (estimate.statedTotal != null) {

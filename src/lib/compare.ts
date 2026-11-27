@@ -43,11 +43,21 @@ function stems(text: string): Set<string> {
   return new Set((plain.match(/[a-z]{4,}/g) ?? []).map((w) => w.slice(0, 5)));
 }
 
-function alike(a: Set<string>, b: Set<string>): boolean {
-  if (a.size === 0 || b.size === 0) return false;
-  let shared = 0;
-  for (const s of a) if (b.has(s)) shared += 1;
-  return shared / Math.min(a.size, b.size) > 0.5;
+/** Words that say where a part sits or what kind of line it is, not what the work is. */
+const GENERIC = new Set(
+  'left right front rear lower upper outer inner assy assem lewy lewa lewe prawy prawa prawe przed tylny tylna repla repai remov insta refit overh blend paint refin labor labou mater suppl parts wymia napra lakie roboc monta demon czesc addit cover'.split(' '),
+);
+
+/**
+ * A line of the quote counts as work the estimate leaves out when at least half of its
+ * telling words appear nowhere in the estimate. "Headlamp calibration" against an estimate
+ * that replaces a headlamp and never mentions calibration is such a line.
+ */
+function leftOut(line: Set<string>, estimateWords: Set<string>): boolean {
+  const telling = [...line].filter((w) => !GENERIC.has(w));
+  if (telling.length === 0) return false;
+  const absent = telling.filter((w) => !estimateWords.has(w)).length;
+  return absent / telling.length >= 0.5;
 }
 
 /**
@@ -64,11 +74,7 @@ export function compareQuote(insurer: Estimate, garage: Estimate): Comparison {
   }
   const insurerNet = round2(rows.reduce((s, r) => s + r.insurer, 0));
   const garageNet = round2(rows.reduce((s, r) => s + r.garage, 0));
-  const known = insurer.items.filter((i) => i.kind !== 'deduction').map((i) => stems(i.desc));
-  const extra = garage.items.filter((i) => {
-    if (i.kind === 'deduction' || amountOf(i) === 0) return false;
-    const mine = stems(i.desc);
-    return mine.size > 0 && !known.some((k) => alike(mine, k));
-  });
+  const estimateWords = new Set([...insurer.items.filter((i) => i.kind !== 'deduction').map((i) => i.desc), ...(insurer.details ?? [])].flatMap((d) => [...stems(d)]));
+  const extra = garage.items.filter((i) => i.kind !== 'deduction' && amountOf(i) > 0 && leftOut(stems(i.desc), estimateWords));
   return { insurerNet, garageNet, gap: round2(garageNet - insurerNet), rows, extra };
 }

@@ -3,7 +3,7 @@ import { audit, defaultSettings, netOfItems, sumMismatch, tierTotals } from './a
 import { mergeEstimates, normalizeEstimate, parseDocumentText, parseModelJson, parseNumber, parsePastedText, parseTranscription } from './extract';
 import { hasTextLayer, layoutLines } from './pdftext';
 import { explainPrompt, inventedFigure } from './explain';
-import { draftLetter, verifyRewrite } from './letter';
+import { applyPolish, draftLetter, joinLetter, letterParts, polishPrompt, verifyRewrite } from './letter';
 import { redact } from './redact';
 import { countryForCurrency } from './countries';
 import { compareQuote } from './compare';
@@ -641,6 +641,35 @@ describe('plain-language explanation', () => {
   it('accepts figures from the estimate and catches an invented one', () => {
     expect(inventedFigure(prompt, 'The insurer allows 7.5 hours... no: 3.4 and 4.1 hours at PLN 95 per hour, and deducts PLN 1,593.00.')).toBeNull();
     expect(inventedFigure(prompt, 'The repair should cost about PLN 7,200.')).toBe('7,200');
+  });
+});
+
+describe('rewording the letter', () => {
+  const estimate = sampleEstimate();
+  const findings = audit(estimate, defaultSettings('PLN', 23));
+  const parts = letterParts(estimate, findings, new Set(findings.map((f) => f.id)), 'realistic', 'en');
+
+  it('gives the model the two prose paragraphs and none of the amounts', () => {
+    const prompt = polishPrompt(parts, 'en');
+    expect(prompt).toContain('I have reviewed the repair estimate');
+    expect(prompt).toContain('within 14 days');
+    expect(prompt).not.toMatch(/PLN|787|Labour rate/);
+    expect(joinLetter(parts)).toBe(draftLetter(estimate, findings, new Set(findings.map((f) => f.id)), 'realistic', 'en'));
+  });
+
+  it('puts two good paragraphs into the letter and leaves the points alone', () => {
+    const out = applyPolish(parts, 'I have gone through the estimate you issued for this claim and I cannot accept it as full settlement, for the reasons below.\n---\nPlease pay this amount within 14 days or tell me in writing why you will not. I may have the car assessed independently.');
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.parts.middle).toBe(parts.middle);
+      expect(joinLetter(out.parts)).toContain('I have gone through the estimate');
+    }
+  });
+
+  it('rejects an answer with a changed deadline, a new amount or the wrong shape', () => {
+    expect(applyPolish(parts, 'I do not accept the estimate as full settlement for the reasons below.\n---\nPlease pay within 7 days or explain in writing why you refuse.')).toMatchObject({ ok: false });
+    expect(applyPolish(parts, 'I do not accept the estimate; you owe me 5,000 more as shown below.\n---\nPlease pay within 14 days or explain in writing why you refuse.')).toMatchObject({ ok: false, reason: 'number_added' });
+    expect(applyPolish(parts, 'Dear insurer, here is one long paragraph without the separator you were asked for, within 14 days.')).toMatchObject({ ok: false, reason: 'shape' });
   });
 });
 
