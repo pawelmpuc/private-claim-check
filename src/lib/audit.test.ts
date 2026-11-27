@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { audit, defaultSettings, netOfItems, tierTotals } from './audit';
-import { mergeEstimates, normalizeEstimate, parseModelJson, parseNumber, parseTranscription } from './extract';
+import { mergeEstimates, normalizeEstimate, parseModelJson, parseNumber, parsePastedText, parseTranscription } from './extract';
 import { draftLetter, verifyRewrite } from './letter';
 import { redact } from './redact';
 import { countryForCurrency } from './countries';
@@ -288,6 +288,40 @@ TOTAL REPAIR COST NET | 1,540.50`,
       ['deduction', 'unknown', null, 30],
     ]);
     expect(netOfItems(est)).toBe(1540.5);
+  });
+
+  it('structures pasted text without a model', () => {
+    const est = parsePastedText(`Kosztorys nr 55/2026, Jan Kowalski, tel. 600 700 800, VIN WVWZZZ1KZAW123456
+Data: 12.11.2026
+Części zamienne:
+Zderzak przedni Q 1 szt. 1 240,00 zł
+Reflektor lewy O 1 szt. 2 890,00 zł
+Robocizna:
+Wymiana zderzaka 3,4 rbh x 95,00 = 323,00 zł
+Lakierowanie:
+Lakierowanie zderzaka 5,2 rbh x 100,00 = 520,00 zł
+Potrącenia:
+Amortyzacja części 30% -1 239,00 zł
+Razem netto: 3 734,00 zł`);
+    expect(est).toMatchObject({ currency: 'PLN', labourRate: 95, paintRate: 100, statedTotal: 3734 });
+    expect(est!.items.map((i) => [i.desc, i.kind, i.partQuality, i.hours, i.total])).toEqual([
+      ['Zderzak przedni', 'part', 'alternative', null, 1240],
+      ['Reflektor lewy', 'part', 'oem', null, 2890],
+      ['Wymiana zderzaka', 'labour', 'unknown', 3.4, 323],
+      ['Lakierowanie zderzaka', 'paint', 'unknown', 5.2, 520],
+      ['Amortyzacja części', 'deduction', 'unknown', null, 1239],
+    ]);
+    expect(netOfItems(est!)).toBe(3734);
+  });
+
+  it('reads English pasted text and leaves prose to the model', () => {
+    const est = parsePastedText(`Parts: Front bumper Non-OEM 1 x £310.00 = £310.00; Left headlamp OEM 1 x £720.00 = £720.00
+Labour: Replace bumper and headlamp 3.4 h at £38.00 = £129.20
+Betterment on parts 30% -£309.00
+Total net £850.20`);
+    expect(est).toMatchObject({ currency: 'GBP', labourRate: 38, statedTotal: 850.2 });
+    expect(est!.items.map((i) => [i.kind, i.total])).toEqual([['part', 310], ['part', 720], ['labour', 129.2], ['deduction', 309]]);
+    expect(parsePastedText('The insurer offered me about 3000 for the repair and I think it is too low.')).toBeNull();
   });
 
   it('marks a doubtful amount when there is no total to settle it', () => {

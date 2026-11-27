@@ -361,3 +361,60 @@ function settleByTotal(rows: Row[], total: number | null): void {
   }
   for (const r of doubtful) r.item.check = true;
 }
+
+const TEXT_NUMBER = /[-\u2212]?\s?\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:[.,]\d{1,2})?|[-\u2212]?\s?\d+(?:[.,]\d{3})*(?:[.,]\d{1,2})?/g;
+const CURRENCY_MARK = /\b(PLN|EUR|GBP|USD|CHF|CZK)\b|z[lł](?![a-ząćęłńóśźż])|€|£|\$/i;
+
+/**
+ * Structures pasted estimate text without a model. Text is already exact, so the
+ * figures are taken as typed: a priced line is one that ends in an amount with two
+ * decimals or a currency. Returns null when fewer than two priced lines are found,
+ * and the caller then asks a model instead.
+ */
+export function parsePastedText(text: string, fallbackCurrency = 'EUR'): Estimate | null {
+  const out: string[] = [];
+  for (const rawLine of text.split(/\r?\n|;/)) {
+    const line = rawLine.replace(/\t/g, '  ').trim();
+    if (!line) continue;
+    const found = [...line.matchAll(TEXT_NUMBER)];
+    if (found.length === 0) {
+      // A heading such as "Robocizna:" or a line of plain words.
+      out.push(line.replace(/[:\s]+$/, ''));
+      continue;
+    }
+    const last = found[found.length - 1];
+    const after = line.slice(last.index + last[0].length);
+    const before = line.slice(0, last.index);
+    const priced = /[.,]\d{2}$/.test(last[0]) || CURRENCY_MARK.test(after) || /[€£$]\s*$/.test(before);
+    if (!priced) continue;
+
+    // "Części: Zderzak przedni ..." carries the section name in front of the first line.
+    let head = line.slice(0, found[0].index).replace(/[\s:=x×*\-–]+$/i, '').trim();
+    const colon = head.indexOf(':');
+    if (colon > 0 && sectionOf(head.slice(0, colon)) && head.slice(colon + 1).trim()) {
+      out.push(head.slice(0, colon).trim());
+      head = head.slice(colon + 1).trim();
+    }
+    head = head.replace(/:$/, '').trim();
+    const cells: string[] = [];
+    const words = head.split(/\s+/);
+    const tail = words[words.length - 1] ?? '';
+    if (words.length > 1 && /^[A-Z]{1,3}$/.test(tail) && qualityOf(tail)) {
+      cells.push(words.slice(0, -1).join(' '), tail);
+    } else if (head) {
+      cells.push(head);
+    }
+    for (const m of found) {
+      const percent = line.slice(m.index + m[0].length).trimStart().startsWith('%');
+      cells.push(m[0].replace(/\s+/g, ' ').trim() + (percent ? '%' : ''));
+    }
+    out.push(cells.join(' | '));
+  }
+  const mark = text.match(CURRENCY_MARK)?.[0];
+  const estimate = parseTranscription([out.join('\n')], fallbackCurrency);
+  if (mark) {
+    const c = mark.toUpperCase();
+    estimate.currency = c === '€' ? 'EUR' : c === '£' ? 'GBP' : c === '$' ? 'USD' : /^Z/.test(c) ? 'PLN' : c;
+  }
+  return estimate.items.length >= 2 ? estimate : null;
+}

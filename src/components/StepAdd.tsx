@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { CloudNotAllowedError, DEVICE_START_TIMEOUT_S, deviceStatus, DeviceTimeoutError, firebaseConfigured, imagePart, NotConfiguredError, run } from '../lib/ai';
-import { emptyItem, mergeEstimates, normalizeEstimate, parseModelJson, parseTranscription, READ_PROMPT, TRANSCRIBE_PROMPT, TRANSCRIBE_TEXT_PROMPT } from '../lib/extract';
+import { emptyItem, mergeEstimates, normalizeEstimate, parseModelJson, parsePastedText, parseTranscription, READ_PROMPT, TRANSCRIBE_PROMPT, TRANSCRIBE_TEXT_PROMPT } from '../lib/extract';
 import { filesToPages, MAX_PAGES, tilesOf, type PageImage } from '../lib/files';
 import { redact } from '../lib/redact';
 import { sampleEstimate } from '../lib/sample';
@@ -138,6 +138,13 @@ export function StepAdd({ allowCloud, hasEstimate, fallbackCurrency, onEstimate,
     const signal = begin();
     setBusy(t('readingText'));
     try {
+      // Typed text is exact already, so plain code reads it when it can. A model is asked only when that fails.
+      const plain = parsePastedText(text, fallbackCurrency);
+      if (plain) {
+        onLog({ step: 'read', source: 'none', redactions: 0 });
+        finish(plain);
+        return;
+      }
       const estimate = await readOne(
         async () => {
           const res = await run({ only: 'device', deviceParts: [`${TRANSCRIBE_TEXT_PROMPT}\n\nTEXT:\n${text}`], cloudParts: [], allowCloud: false, onText: setLive, signal });
