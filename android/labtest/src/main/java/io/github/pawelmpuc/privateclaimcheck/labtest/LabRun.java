@@ -51,8 +51,11 @@ public class LabRun extends Instrumentation {
             boolean emulator = Build.FINGERPRINT.contains("generic") || Build.FINGERPRINT.contains("emu")
                     || Build.HARDWARE.contains("ranchu") || Build.HARDWARE.contains("goldfish");
             // An emulator has no Gemini Nano: it only proves that this run itself works.
-            int waitForModelS = emulator ? 40 : 1500;
-            long budgetMs = (emulator ? 4 : 41) * 60_000L;
+            // A phone without AICore will never have the model: there the run only checks the cloud half.
+            boolean hasAiCore = !grep(sh("pm list packages"), "package:" + AICORE).isEmpty();
+            boolean quick = emulator || !hasAiCore;
+            int waitForModelS = quick ? 40 : 1500;
+            long budgetMs = (quick ? 6 : 41) * 60_000L;
 
             say("Phone: " + Build.MANUFACTURER + " " + Build.MODEL + ", Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")" + (emulator ? ", emulator" : ""));
             for (String prop : new String[] {"ro.boot.verifiedbootstate", "ro.boot.flash.locked", "ro.boot.vbmeta.device_state"}) {
@@ -76,6 +79,7 @@ public class LabRun extends Instrumentation {
             open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             open.putExtra("selftest", true);
             open.putExtra("selftestWait", waitForModelS);
+            open.putExtra("selftestCloud", true);
             getTargetContext().startActivity(open);
             say("Self-test started; it asks for the model for up to " + waitForModelS + " s");
 
@@ -98,12 +102,12 @@ public class LabRun extends Instrumentation {
                 boolean noModelYet = !contains(app, "On-device model: downloadable") && !contains(app, "On-device model: downloading")
                         && !contains(app, "On-device model: available") && !contains(app, "Download:");
                 // If the model still has not turned up, restart the services that deliver its settings, the way a reboot would.
-                if (!emulator && noModelYet && seconds > 240 && !nudgedPlayServices) {
+                if (!quick && noModelYet && seconds > 240 && !nudgedPlayServices) {
                     nudgedPlayServices = true;
                     say("After " + seconds + " s: still no model; restarting Google Play services");
                     sh("am force-stop com.google.android.gms");
                 }
-                if (!emulator && noModelYet && seconds > 480 && !nudgedAiCore) {
+                if (!quick && noModelYet && seconds > 480 && !nudgedAiCore) {
                     nudgedAiCore = true;
                     say("After " + seconds + " s: still no model; restarting AICore");
                     sh("am force-stop " + AICORE);
@@ -111,7 +115,7 @@ public class LabRun extends Instrumentation {
             }
             say("AICore settings on the phone at the end: " + lines(sh("device_config list aicore")).size());
             report("AICore package at the end", grep(sh("dumpsys package " + AICORE), "versionName=", "lastUpdateTime="), 4);
-            report("The app's self-test", grep(sh("logcat -d -s PCC:I"), "[PCC selftest]"), 60);
+            report("The app's self-test", grep(sh("logcat -d -s PCC:I"), "[PCC selftest]"), 80);
         } catch (Throwable problem) {
             Log.e(TAG, "The run itself failed", problem);
         }

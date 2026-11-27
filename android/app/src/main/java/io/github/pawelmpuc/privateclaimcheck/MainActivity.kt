@@ -87,7 +87,9 @@ class MainActivity : ComponentActivity() {
             if (selfTest) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             // "selftestWait": how many seconds the self-test keeps asking a freshly reset phone for its model.
             val wait = intent.getIntExtra("selftestWait", 0)
-            val query = if (selfTest) "?selftest" + (if (wait > 0) "&wait=$wait" else "") else ""
+            // "selftestCloud": also send the built-in sample estimate (no real document) to the cloud model.
+            val cloud = intent.getBooleanExtra("selftestCloud", false)
+            val query = if (selfTest) "?selftest" + (if (wait > 0) "&wait=$wait" else "") + (if (cloud) "&cloud=1" else "") else ""
             webView.loadUrl("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/www/index.html$query")
         } else {
             webView.restoreState(savedInstanceState)

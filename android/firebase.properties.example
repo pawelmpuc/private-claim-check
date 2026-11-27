@@ -4,3 +4,7 @@
 apiKey=
 applicationId=
 projectId=
+# Optional: an App Check debug token you created in the console (App Check, Apps, the Android app,
+# Manage debug tokens). With it the build can reach the cloud model on any phone. Without it each
+# installation makes its own token, shown at the bottom of the privacy panel, to register by hand.
+appCheckDebugToken=

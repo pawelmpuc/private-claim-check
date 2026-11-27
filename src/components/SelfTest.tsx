@@ -66,7 +66,24 @@ export function SelfTest() {
         say('On-device request', `failed: ${err instanceof Error ? err.message : String(err)}`, false);
       }
     };
-    void test().finally(() => {
+    // `?selftest&cloud=1` also sends the built-in sample estimate (an invented document) to the
+    // cloud model, to show the other half of the hybrid on a phone that has no on-device model.
+    const cloudTest = async () => {
+      const prompt = explainPrompt(sampleEstimate(), 'en');
+      const started = Date.now();
+      try {
+        const res = await run({ deviceParts: [prompt], cloudParts: [prompt], allowCloud: true, only: 'cloud', onText: (text) => say('Cloud request', `writing… ${text.length} characters`, null) });
+        const seconds = Math.round((Date.now() - started) / 1000);
+        say('Cloud request', `answered in ${seconds} s, ran ${res.source === 'in_cloud' ? 'in the cloud' : 'on this device'}`, res.source === 'in_cloud');
+        const invented = inventedFigure(prompt, res.text);
+        say('Cloud figure check', invented ? `rejected, invented figure ${invented}` : 'passed: every figure is in the estimate', !invented);
+        say('Cloud answer', res.text.trim(), null);
+      } catch (err) {
+        say('Cloud request', `failed: ${err instanceof Error ? err.message : String(err)}`, false);
+      }
+    };
+    const withCloud = new URLSearchParams(location.search).has('cloud');
+    void test().then(() => (withCloud ? cloudTest() : undefined)).finally(() => {
       say('Self-test', 'finished', null);
       nativeSelfTestDone();
     });
@@ -78,7 +95,10 @@ export function SelfTest() {
   return (
     <section className="card selftest" aria-labelledby="selftest-title">
       <h2 id="selftest-title">On-device self-test</h2>
-      <p className="help">Runs by itself. Nothing is sent to the cloud in this test.</p>
+      <p className="help">
+        Runs by itself.{' '}
+        {new URLSearchParams(location.search).has('cloud') ? 'The cloud step sends only the built-in sample estimate, an invented document.' : 'Nothing is sent to the cloud in this test.'}
+      </p>
       <dl>
         {lines.map((line) => (
           <div key={line.step} className={line.ok == null ? '' : line.ok ? 'pass' : 'fail'}>

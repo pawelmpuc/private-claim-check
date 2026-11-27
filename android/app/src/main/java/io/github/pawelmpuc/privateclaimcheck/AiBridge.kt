@@ -104,7 +104,8 @@ class AiBridge(private val webView: WebView, private val onSelfTestDone: () -> U
      * developer can register it in the Firebase console without reading logcat.
      */
     private fun debugToken(): String {
-        if (!BuildConfig.DEBUG) return ""
+        // Nothing to register by hand when a registered token was built in.
+        if (!BuildConfig.DEBUG || BuildConfig.APPCHECK_DEBUG_TOKEN.isNotBlank()) return ""
         val key = FirebaseApp.getInstance().persistenceKey
         return webView.context.getSharedPreferences("com.google.firebase.appcheck.debug.store.$key", Context.MODE_PRIVATE)
             .getString("com.google.firebase.appcheck.debug.DEBUG_SECRET", "") ?: ""

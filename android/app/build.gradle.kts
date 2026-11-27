@@ -25,6 +25,8 @@ android {
         buildConfigField("String", "FIREBASE_API_KEY", fb("apiKey"))
         buildConfigField("String", "FIREBASE_APP_ID", fb("applicationId"))
         buildConfigField("String", "FIREBASE_PROJECT_ID", fb("projectId"))
+        // Optional. An App Check debug token registered in the Firebase console, so one build works on any phone.
+        buildConfigField("String", "APPCHECK_DEBUG_TOKEN", fb("appCheckDebugToken"))
     }
     buildTypes {
         // Same as debug (debug signing key, App Check debug provider), but shrunk with R8.
