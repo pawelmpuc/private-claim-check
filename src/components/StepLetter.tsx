@@ -4,7 +4,7 @@ import { TIERS, tierTotals } from '../lib/audit';
 import type { Key } from '../lib/i18n';
 import { draftLetter, fillDetails, money, POLISH_PROMPT, verifyRewrite, type LetterDetails } from '../lib/letter';
 import { redact } from '../lib/redact';
-import type { Estimate, Finding, InferenceLogEntry, Tier } from '../lib/types';
+import type { Estimate, Finding, InferenceLogEntry, Lang, Tier } from '../lib/types';
 import { useT } from '../lib/useT';
 
 interface Props {
@@ -24,22 +24,25 @@ export function StepLetter({ estimate, findings, selected, tier, onTier, allowCl
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  // The letter goes to the insurer, so its language can differ from the interface language.
+  const [letterLang, setLetterLang] = useState<Lang>(lang);
+  useEffect(() => setLetterLang(lang), [lang]);
 
-  const draft = useMemo(() => draftLetter(estimate, findings, selected, tier, lang), [estimate, findings, selected, tier, lang]);
+  const draft = useMemo(() => draftLetter(estimate, findings, selected, tier, letterLang), [estimate, findings, selected, tier, letterLang]);
   const totals = tierTotals(findings, selected);
   // A rewrite is only valid for the exact draft it was made from.
   const body = rewrite && rewrite.draft === draft ? rewrite.text : draft;
   const [text, setText] = useState('');
-  useEffect(() => setText(fillDetails(body, details, lang)), [body, details, lang]);
+  useEffect(() => setText(fillDetails(body, details, letterLang)), [body, details, letterLang]);
   useEffect(() => setMessage(null), [draft]);
 
   const polish = async () => {
     setBusy(true);
     setMessage(null);
     try {
-      const prompt = POLISH_PROMPT[lang] + draft;
+      const prompt = POLISH_PROMPT[letterLang] + draft;
       const safe = redact(prompt);
-      const res = await run({ deviceParts: [prompt], cloudParts: [safe.text], allowCloud, outputLang: lang });
+      const res = await run({ deviceParts: [prompt], cloudParts: [safe.text], allowCloud, outputLang: letterLang });
       onLog({ step: 'letter', source: res.source, redactions: res.source === 'in_cloud' ? safe.count : 0, note: res.deviceError ? 'device_failed' : undefined });
       const candidate = res.text.trim();
       if (verifyRewrite(draft, candidate).ok) {
@@ -68,7 +71,7 @@ export function StepLetter({ estimate, findings, selected, tier, onTier, allowCl
     const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = lang === 'pl' ? 'odwolanie.txt' : 'appeal-letter.txt';
+    a.download = letterLang === 'pl' ? 'odwolanie.txt' : 'appeal-letter.txt';
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -98,6 +101,15 @@ export function StepLetter({ estimate, findings, selected, tier, onTier, allowCl
               </label>
             ))}
           </fieldset>
+
+          <div className="letter-lang" role="group" aria-label={t('letterLang')}>
+            <span>{t('letterLang')}</span>
+            {(['en', 'pl'] as Lang[]).map((l) => (
+              <button key={l} type="button" className={l === letterLang ? 'on' : ''} aria-pressed={l === letterLang} onClick={() => setLetterLang(l)}>
+                {l === 'en' ? 'English' : 'Polski'}
+              </button>
+            ))}
+          </div>
 
           <h3>{t('letterDetails')}</h3>
           <p className="help">{t('letterDetailsHelp')}</p>

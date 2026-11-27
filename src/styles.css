@@ -570,6 +570,34 @@ textarea {
 }
 
 /* Step 4 */
+.letter-lang {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 8px;
+  font-weight: 600;
+}
+
+.letter-lang span {
+  margin-right: 6px;
+}
+
+.letter-lang button {
+  font: inherit;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.letter-lang button.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
 .letter {
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 1rem;

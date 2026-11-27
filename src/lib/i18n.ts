@@ -109,6 +109,7 @@ const en = {
   d_arithmetic: 'Lines add up to {lines}, the printed total is {stated}.',
 
   letterTier: 'Amount to claim',
+  letterLang: 'Language of the letter',
   letterDetails: 'Your details',
   letterDetailsHelp: 'Filled in on this device after the letter is written. They are never sent to an AI model.',
   fName: 'Full name',
@@ -241,6 +242,7 @@ const pl: Record<Key, string> = {
   d_arithmetic: 'Pozycje dają razem {lines}, a wydrukowana suma to {stated}.',
 
   letterTier: 'Kwota roszczenia',
+  letterLang: 'Język pisma',
   letterDetails: 'Twoje dane',
   letterDetailsHelp: 'Uzupełniane na tym urządzeniu po napisaniu pisma. Nigdy nie trafiają do modelu AI.',
   fName: 'Imię i nazwisko',
