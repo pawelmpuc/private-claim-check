@@ -222,7 +222,7 @@ export function StepAdd({ variant = 'estimate', allowCloud, hasEstimate, fallbac
 
       <details className="paste">
         <summary>{t(quote ? 'orPasteQuote' : 'orPaste')}</summary>
-        <textarea rows={6} value={text} placeholder={t('pastePlaceholder')} onChange={(e) => setText(e.target.value)} />
+        <textarea rows={6} value={text} placeholder={t(quote ? 'pasteQuotePlaceholder' : 'pastePlaceholder')} onChange={(e) => setText(e.target.value)} />
         <button type="button" className="btn" onClick={() => void readText()} disabled={busy != null || text.trim().length < 20 || !firebaseConfigured}>
           {t('readText')}
         </button>
